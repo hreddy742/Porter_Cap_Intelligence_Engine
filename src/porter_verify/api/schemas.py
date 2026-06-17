@@ -82,6 +82,7 @@ class RunOut(BaseModel):
     id: uuid.UUID
     status: RunStatus
     verification_status: VerificationStatus | None
+    company_id: uuid.UUID | None
     match_confidence: float | None
     risk_score: float | None
     score_version: str | None

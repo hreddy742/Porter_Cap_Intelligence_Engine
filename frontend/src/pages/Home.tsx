@@ -1,30 +1,44 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, ApiError, type VerifyResponse } from "../api";
+import { api, ApiError, TERMINAL_RUN_STATUSES, type Run } from "../api";
 import { StatusBadge } from "../components/StatusBadge";
 
-// Home: the entry point — run a verification and jump to the resulting profile.
+// Home: start an async verification, poll the run until it finishes, then show the
+// result and a link to the company profile. Mirrors the backend's async (poll) flow.
 export function Home() {
   const navigate = useNavigate();
   const [name, setName] = useState("");
   const [state, setState] = useState("");
-  const [loading, setLoading] = useState(false);
+  const [status, setStatus] = useState<"idle" | "running" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<VerifyResponse | null>(null);
+  const [result, setResult] = useState<Run | null>(null);
+
+  async function pollRun(runId: string): Promise<Run> {
+    // Poll up to ~60s (live lookups can be slow); the backend run is the source of truth.
+    for (let attempt = 0; attempt < 60; attempt++) {
+      const { run } = await api.getRun(runId);
+      if (TERMINAL_RUN_STATUSES.includes(run.status)) return run;
+      await new Promise((r) => setTimeout(r, 1000));
+    }
+    throw new Error("Verification is taking longer than expected. Check back shortly.");
+  }
 
   async function onVerify(e: React.FormEvent) {
     e.preventDefault();
-    setLoading(true);
+    setStatus("running");
     setError(null);
     setResult(null);
     try {
-      setResult(await api.verify(name.trim(), state.trim() || null));
+      const started = await api.verify(name.trim(), state.trim() || null);
+      setResult(await pollRun(started.run_id));
+      setStatus("done");
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Something went wrong.");
-    } finally {
-      setLoading(false);
+      setStatus("error");
     }
   }
+
+  const running = status === "running";
 
   return (
     <>
@@ -41,7 +55,7 @@ export function Home() {
               id="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="e.g. Acme Logistics LLC"
+              placeholder="e.g. Rock Ridge Condominiums, Inc. (CO) or Acme Logistics LLC (TX)"
               required
               style={{ width: "100%" }}
             />
@@ -52,15 +66,16 @@ export function Home() {
               id="state"
               value={state}
               onChange={(e) => setState(e.target.value.toUpperCase())}
-              placeholder="TX"
+              placeholder="CO"
               maxLength={2}
               style={{ width: "70px" }}
             />
           </div>
-          <button type="submit" disabled={loading || !name.trim()}>
-            {loading ? "Verifying…" : "Run verification"}
+          <button type="submit" disabled={running || !name.trim()}>
+            {running ? "Verifying…" : "Run verification"}
           </button>
         </form>
+        {running && <p className="muted">Verification running — polling for the result…</p>}
       </div>
 
       {error && <div className="error">{error}</div>}
@@ -70,7 +85,7 @@ export function Home() {
           <h2>Result</h2>
           <p>
             <StatusBadge status={result.verification_status} />{" "}
-            <span className="muted">{result.message}</span>
+            <span className="muted">run {result.status}</span>
           </p>
           {result.match_confidence != null && (
             <p className="muted">Match confidence: {result.match_confidence.toFixed(2)}</p>

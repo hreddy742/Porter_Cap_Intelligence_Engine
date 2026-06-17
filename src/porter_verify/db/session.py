@@ -40,11 +40,14 @@ def create_db_engine(settings: Settings | None = None) -> Engine:
             poolclass=StaticPool if ":memory:" in url else None,
         )
 
-        # SQLite does not enforce foreign keys unless asked to.
+        # SQLite needs foreign keys turned on, and a busy timeout so concurrent
+        # background verifications wait for the write lock instead of erroring with
+        # "database is locked".
         @event.listens_for(engine, "connect")
-        def _enable_sqlite_fks(dbapi_connection, _record):  # noqa: ANN001
+        def _sqlite_pragmas(dbapi_connection, _record):  # noqa: ANN001
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA busy_timeout=5000")
             cursor.close()
 
         return engine

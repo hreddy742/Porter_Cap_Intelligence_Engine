@@ -21,7 +21,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import date
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from porter_verify.connectors.base import (
     CAP_STATUS,
@@ -101,6 +101,30 @@ def _finalize(
     )
 
 
+def create_pending_run(
+    session: Session, *, trigger: str = "manual", actor: str = "system"
+) -> VerificationRun:
+    """Create a PENDING verification run and return it immediately (async entry).
+
+    The API creates the run synchronously so the caller gets a run_id to poll, then
+    the actual work runs in the background via ``execute_pending_run``.
+    """
+
+    run = VerificationRun(status=RunStatus.PENDING, trigger=trigger, score_version=SCORING_VERSION)
+    session.add(run)
+    session.flush()  # assign run.id before we reference it in the audit entry
+    record_audit(
+        session,
+        actor=actor,
+        action="run.created",
+        entity_type="verification_run",
+        entity_id=str(run.id),
+    )
+    session.commit()
+    log.info("verification_queued", run_id=str(run.id))
+    return run
+
+
 def run_verification(
     session: Session,
     *,
@@ -111,10 +135,61 @@ def run_verification(
     actor: str = "system",
     trigger: str = "manual",
 ) -> VerifyOutcome:
-    """Run the full verification flow for a business name (+ optional state)."""
+    """Run the flow synchronously (create run + execute). Used by tests and seeding."""
 
     run = VerificationRun(status=RunStatus.RUNNING, trigger=trigger, score_version=SCORING_VERSION)
     session.add(run)
+    session.flush()
+    return _execute(
+        session,
+        run,
+        registry=registry,
+        evidence_store=evidence_store,
+        name=name,
+        state=state,
+        actor=actor,
+    )
+
+
+def execute_pending_run(
+    session: Session,
+    *,
+    run_id: uuid.UUID,
+    registry: ConnectorRegistry,
+    evidence_store: EvidenceStore,
+    name: str,
+    state: str | None = None,
+    actor: str = "system",
+) -> VerifyOutcome:
+    """Execute a previously-created PENDING run (the async background path)."""
+
+    run = session.get(VerificationRun, run_id)
+    if run is None:
+        raise LookupError(f"verification run {run_id} not found")
+    return _execute(
+        session,
+        run,
+        registry=registry,
+        evidence_store=evidence_store,
+        name=name,
+        state=state,
+        actor=actor,
+    )
+
+
+def _execute(
+    session: Session,
+    run: VerificationRun,
+    *,
+    registry: ConnectorRegistry,
+    evidence_store: EvidenceStore,
+    name: str,
+    state: str | None,
+    actor: str,
+) -> VerifyOutcome:
+    """Run the full verification flow against an existing run row."""
+
+    run.status = RunStatus.RUNNING
     session.flush()
     log.info("verification_started", run_id=str(run.id), name=name, state=state)
 
@@ -314,6 +389,49 @@ def run_verification(
         company_id=company.id,
         message=f"Verification complete: {overall.value}.",
     )
+
+
+def run_in_background(
+    *,
+    run_id: uuid.UUID,
+    name: str,
+    state: str | None,
+    actor: str,
+    session_factory: sessionmaker,
+    registry: ConnectorRegistry,
+    evidence_store: EvidenceStore,
+) -> None:
+    """Execute a pending run in its own DB session. Never raises.
+
+    Handed to FastAPI BackgroundTasks: the HTTP response (with the run_id) is already
+    sent; the client polls ``GET /runs/{id}`` for completion. Any crash is recorded
+    on the run as FAILED with an error log, so a failure is always visible.
+    """
+
+    from porter_verify.db.base import utcnow
+
+    try:
+        with session_factory() as session:
+            execute_pending_run(
+                session,
+                run_id=run_id,
+                registry=registry,
+                evidence_store=evidence_store,
+                name=name,
+                state=state,
+                actor=actor,
+            )
+    except Exception as exc:  # noqa: BLE001 — background boundary: record, never propagate
+        log.error("verification_background_failed", run_id=str(run_id), error=str(exc))
+        # Use a FRESH session: the one above may be in a rolled-back/broken state.
+        _terminal = {RunStatus.COMPLETED, RunStatus.SOURCE_UNAVAILABLE, RunStatus.FAILED}
+        with session_factory() as session:
+            run = session.get(VerificationRun, run_id)
+            if run is not None and run.status not in _terminal:
+                run.status = RunStatus.FAILED
+                run.finished_at = utcnow()
+                session.add(ErrorLog(run_id=run_id, error_type="execution_error", message=str(exc)))
+                session.commit()
 
 
 def _parse_iso_date(value: str | None) -> date | None:

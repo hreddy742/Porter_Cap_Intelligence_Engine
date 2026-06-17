@@ -58,12 +58,15 @@ export interface Run {
   id: string;
   status: string;
   verification_status: VerificationStatus | null;
+  company_id: string | null;
   match_confidence: number | null;
   risk_score: number | null;
   score_version: string | null;
   started_at: string;
   finished_at: string | null;
 }
+
+export const TERMINAL_RUN_STATUSES = ["completed", "failed", "source_unavailable"];
 
 export interface Evidence {
   id: string;
@@ -126,6 +129,8 @@ export const api = {
     if (state) params.set("state", state);
     return request<{ results: CompanySummary[] }>(`/companies?${params.toString()}`);
   },
+  getRun: (runId: string) =>
+    request<{ run: Run; scores: ScoreComponent[]; evidence: Evidence[] }>(`/runs/${runId}`),
   profile: (companyId: string) => request<Profile>(`/companies/${companyId}/profile`),
   review: (runId: string, decision: string, reason: string) =>
     request<{ id: string; run_id: string; decision: string }>(`/review/${runId}/decision`, {
