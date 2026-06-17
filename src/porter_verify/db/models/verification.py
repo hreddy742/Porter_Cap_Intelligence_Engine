@@ -25,7 +25,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from porter_verify.db.base import Base, CapturedAtMixin, utcnow, uuid_pk
-from porter_verify.db.enums import EvidenceType, RunStatus
+from porter_verify.db.enums import EvidenceType, RunStatus, VerificationStatus
 
 
 class VerificationRun(Base):
@@ -43,6 +43,11 @@ class VerificationRun(Base):
         Enum(RunStatus, native_enum=False, length=30),
         default=RunStatus.PENDING,
         nullable=False,
+    )
+    # The derived overall verification outcome (VERIFIED / NEEDS_REVIEW / ...).
+    # Distinct from ``status`` above, which is the run's lifecycle state.
+    verification_status: Mapped[VerificationStatus | None] = mapped_column(
+        Enum(VerificationStatus, native_enum=False, length=30)
     )
     # Version of the scoring + normalization logic used, for reproducibility.
     score_version: Mapped[str | None] = mapped_column(String(20))

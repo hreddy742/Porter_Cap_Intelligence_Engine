@@ -87,16 +87,32 @@ def _jaccard(a: set[str], b: set[str]) -> float:
     return len(a & b) / len(a | b)
 
 
-def name_sim(a: str, b: str) -> float:
-    """Similarity of two names: average of token-set and character-trigram Jaccard.
+def _token_sim(a_tokens: set[str], b_tokens: set[str]) -> float:
+    """Token similarity that tolerates extra tokens (e.g. a missing 'LLC' suffix).
 
-    Both inputs are normalized first. Returns 0.0..1.0.
+    Averages Jaccard (penalizes extra tokens) with containment (|∩| / smaller set,
+    which is 1.0 when one name's tokens are a subset of the other's). This keeps an
+    exact core name + suffix difference in the review band rather than dismissing it.
+    """
+
+    if not a_tokens or not b_tokens:
+        return 0.0
+    inter = len(a_tokens & b_tokens)
+    jaccard = inter / len(a_tokens | b_tokens)
+    containment = inter / min(len(a_tokens), len(b_tokens))
+    return (jaccard + containment) / 2
+
+
+def name_sim(a: str, b: str) -> float:
+    """Similarity of two names in 0.0..1.0 (normalized first).
+
+    Average of a containment-aware token similarity and character-trigram Jaccard.
     """
 
     na, nb = normalize_name(a), normalize_name(b)
     if na == nb:
         return 1.0
-    token_sim = _jaccard(set(na.split()), set(nb.split()))
+    token_sim = _token_sim(set(na.split()), set(nb.split()))
     tri_sim = _jaccard(_trigrams(na), _trigrams(nb))
     return round((token_sim + tri_sim) / 2, 4)
 
@@ -139,6 +155,49 @@ def weighted_match(query: EntityQuery, candidate: Candidate) -> ScoredCandidate:
     return ScoredCandidate(
         candidate=candidate, score=round(min(score, 1.0), 4), components=components
     )
+
+
+def rank_results(query: EntityQuery, candidates: list[Candidate]) -> Resolution:
+    """Rank source search results against a SPARSE query (name + optional state).
+
+    The verify-from-name flow only has the user's name and state — not a reg_id —
+    so the full ``weighted_match`` formula (which puts 0.45 on reg_id) doesn't
+    apply. Here confidence is driven by name similarity, gated by state agreement:
+    a state mismatch halves the score. Thresholds (auto/review) are the same, so an
+    exact legal-name + state match can auto-accept while a partial name routes to
+    review. Ambiguity (two close results) always routes to review.
+    """
+
+    if not candidates:
+        return Resolution(outcome=Outcome.NO_MATCH, chosen=None, candidates=[])
+
+    scored_list: list[ScoredCandidate] = []
+    for c in candidates:
+        name_score = name_sim(query.name, c.name)
+        state_ok = _state_eq(query.state, c.state) == 1.0 or query.state is None
+        score = name_score if state_ok else name_score * 0.5
+        scored_list.append(
+            ScoredCandidate(
+                candidate=c,
+                score=round(score, 4),
+                components={"name": name_score, "state_ok": float(state_ok)},
+            )
+        )
+
+    scored = sorted(scored_list, key=lambda sc: sc.score, reverse=True)
+    top = scored[0]
+    runner_up = scored[1] if len(scored) > 1 else None
+    ambiguous = runner_up is not None and (top.score - runner_up.score) <= AMBIGUITY_MARGIN
+
+    # ``chosen`` is always the best record found, so the flow can record what it
+    # saw; the outcome reflects how confident we are it's the right entity.
+    if top.score >= AUTO_ACCEPT_THRESHOLD and not ambiguous:
+        outcome = Outcome.AUTO_ACCEPT
+    elif top.score >= REVIEW_THRESHOLD:
+        outcome = Outcome.NEEDS_REVIEW
+    else:
+        outcome = Outcome.NO_MATCH
+    return Resolution(outcome=outcome, chosen=top, candidates=scored[:5])
 
 
 def resolve(query: EntityQuery, candidates: list[Candidate]) -> Resolution:
