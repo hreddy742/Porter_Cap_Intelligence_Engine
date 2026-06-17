@@ -6,14 +6,23 @@ and is shippable on its own. Slices map to the plan's Phase 1 (§5, §24).
 | Slice | Scope | Status |
 |-------|-------|--------|
 | 0 | Foundation: repo, config, logging, tests, docker-compose, docs | ✅ done |
-| 1 | Core data model (18 tables) + Alembic migration + DB tests | ⏳ |
-| 2 | Core services: source registry, raw ingestion, normalization, evidence, audit | ⏳ |
-| 3 | Entity resolution v1 + scoring v1 (golden tests) | ⏳ |
-| 4 | Connector framework + OFAC + mock vendor (contract tests) | ⏳ |
-| 5 | Verification run orchestration (end-to-end flow) | ⏳ |
-| 6 | FastAPI endpoints + permission tests | ⏳ |
-| 7 | React + Vite dashboard (search → profile → evidence → review) | ⏳ |
-| 8 | Reports, Salesforce foundation, security hardening, CI | ⏳ |
+| 1 | Core data model (18 tables) + Alembic migration + DB tests | ✅ done |
+| 2 | Core services: normalization, evidence, audit | ✅ done |
+| 3 | Entity resolution v1 + scoring v1 (boundary tests) | ✅ done |
+| 4 | Connector framework + OFAC + mock vendor (contract tests) | ✅ done |
+| 5 | Verification run orchestration (end-to-end flow) | ✅ done |
+| 6 | FastAPI endpoints + RBAC + permission tests | ✅ done |
+| 7 | React + Vite dashboard (search → profile → evidence → review) | ✅ done |
+| 8 | Salesforce foundation, seed data, CI, deployment/runbook docs | ✅ done |
+
+### Not yet built (next phases)
+
+- Reports / KYB packet PDF export (plan §7.18, Phase 4)
+- UCC / lien intelligence (plan §7.7, Phase 2)
+- Real SOS/KYB vendor connector (swap in behind the existing contract)
+- Real SSO/JWT auth replacing the header-based MVP boundary
+- Duplicate-company review/merge tooling (plan §7.11)
+- Monitoring/alerts + Sentry wiring (plan Phase 5)
 
 ## Definition of done (per slice)
 
