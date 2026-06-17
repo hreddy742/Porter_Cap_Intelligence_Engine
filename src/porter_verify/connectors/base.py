@@ -122,7 +122,12 @@ class ConnectorRegistry:
             )
             if not covers_state:
                 continue
-            if connector.health().status == "unavailable":
+            # A connector whose health check errors is treated as unavailable and
+            # skipped — one bad connector must never crash source selection.
+            try:
+                if connector.health().status == "unavailable":
+                    continue
+            except Exception:
                 continue
             return connector
         return None

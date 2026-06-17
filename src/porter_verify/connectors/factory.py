@@ -1,18 +1,29 @@
 """Builders for the connector registry.
 
 The default registry wires up the connectors available in the current environment.
-In the MVP that is the built-in mock vendor; a real SOS/KYB vendor connector is
-added here once credentials are configured (the rest of the system is unchanged —
-that is the swappability guarantee).
+When a database session factory is provided, the Colorado open-data connector is
+registered (it reads our ingested copy of the state dataset). The built-in mock
+vendor remains as a nationwide fallback for states with no real connector yet.
+
+Selection picks the first matching connector, so the Colorado connector is
+registered FIRST — for ``state=CO`` it wins; for other states it is skipped
+(states={"CO"}) and the nationwide mock handles them.
 """
 
 from __future__ import annotations
 
+from sqlalchemy.orm import sessionmaker
+
 from porter_verify.connectors.base import ConnectorRegistry
+from porter_verify.connectors.colorado_connector import ColoradoOpenDataConnector
 from porter_verify.connectors.mock_vendor import MockVendorConnector
 
 
-def build_default_registry() -> ConnectorRegistry:
+def build_default_registry(session_factory: sessionmaker | None = None) -> ConnectorRegistry:
     registry = ConnectorRegistry()
+    # State-specific real connectors first (they win for their state).
+    if session_factory is not None:
+        registry.register(ColoradoOpenDataConnector(session_factory))
+    # Nationwide fallback last.
     registry.register(MockVendorConnector())
     return registry

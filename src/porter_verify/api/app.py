@@ -41,7 +41,7 @@ def create_app(
     app = FastAPI(title="Porter Verify", version=__version__)
     app.state.settings = settings
     app.state.session_factory = session_factory
-    app.state.registry = registry or build_default_registry()
+    app.state.registry = registry or build_default_registry(session_factory)
     app.state.evidence_store = evidence_store or EvidenceStore(settings.evidence_dir)
 
     # CORS: permissive for local dev (React on Vite); locked down elsewhere.
