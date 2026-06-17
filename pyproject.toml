@@ -47,6 +47,8 @@ addopts = "-ra -q"
 line-length = 100
 target-version = "py312"
 src = ["src", "tests"]
+# Alembic migrations are generated; don't lint their formatting.
+extend-exclude = ["src/porter_verify/db/alembic/versions"]
 
 [tool.ruff.lint]
 # E/F = pyflakes+pycodestyle, I = isort, B = bugbear, UP = pyupgrade, SIM = simplify
