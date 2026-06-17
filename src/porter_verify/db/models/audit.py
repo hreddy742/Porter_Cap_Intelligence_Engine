@@ -5,7 +5,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, String, Text
+from sqlalchemy import JSON, BigInteger, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from porter_verify.db.base import Base, CapturedAtMixin, utcnow, uuid_pk
@@ -20,7 +20,12 @@ class AuditLog(Base):
 
     __tablename__ = "audit_logs"
 
-    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    # BigInteger in Postgres; INTEGER on SQLite so it autoincrements as the rowid.
+    id: Mapped[int] = mapped_column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+    )
     actor: Mapped[str] = mapped_column(String(320), nullable=False)
     action: Mapped[str] = mapped_column(String(100), nullable=False)
     entity_type: Mapped[str | None] = mapped_column(String(100))
