@@ -149,10 +149,19 @@ def add_registered_agent(
     agent_address: str | None,
     source_id: uuid.UUID | None,
 ) -> RegisteredAgent | None:
-    """Record a registered agent (skipped when no agent data is present)."""
+    """Set the registration's current registered agent (skipped when no data).
+
+    A registration has a single current agent, so we REPLACE: clear any existing
+    agent rows for this registration first. This self-heals duplicates from repeated
+    verifications (re-verify => exactly one agent, not N copies).
+    """
 
     if not agent_name and not agent_address:
         return None
+    for old in session.scalars(
+        select(RegisteredAgent).where(RegisteredAgent.registration_id == registration.id)
+    ):
+        session.delete(old)
     agent = RegisteredAgent(
         registration_id=registration.id,
         agent_name=agent_name,

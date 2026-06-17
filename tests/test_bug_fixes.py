@@ -17,7 +17,7 @@ from porter_verify.connectors.base import (
 )
 from porter_verify.connectors.factory import build_default_registry
 from porter_verify.db.enums import IdentifierType, RegistrationStatus, VerificationStatus
-from porter_verify.db.models import CompanyIdentifier, CompanyOfficer
+from porter_verify.db.models import CompanyIdentifier, CompanyOfficer, RegisteredAgent
 from porter_verify.services.companies import upsert_company
 from porter_verify.services.evidence import EvidenceStore
 from porter_verify.services.queries import search_companies
@@ -104,6 +104,18 @@ def test_reverify_does_not_duplicate_officers(tmp_path: Path, db_session: Sessio
     # Acme has exactly one officer in the fixture; two runs must not double it.
     count = db_session.scalar(select(func.count()).select_from(CompanyOfficer))
     assert count == 1
+
+
+def test_reverify_does_not_duplicate_registered_agent(tmp_path: Path, db_session: Session) -> None:
+    registry = build_default_registry()
+    store = _store(tmp_path)
+    for _ in range(3):
+        run_verification(
+            db_session, registry=registry, evidence_store=store,
+            name="Acme Logistics LLC", state="TX",
+        )
+    count = db_session.scalar(select(func.count()).select_from(RegisteredAgent))
+    assert count == 1  # replaced each run, not accumulated
 
 
 # --- #3: search must not match everything on a punctuation-only query ------
