@@ -19,7 +19,7 @@ Real column names (confirmed from the live dataset):
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 
 
 @dataclass(frozen=True)
@@ -38,15 +38,23 @@ class CoBusinessRecord:
 
 
 def parse_co_date(value: str | None) -> date | None:
-    """Parse Colorado's ``2025-06-16T00:00:00.000`` timestamp into a date.
+    """Parse a Colorado date into a ``date``, handling both source formats.
 
-    Returns None for blank/unparseable values (never guesses).
+    The two Colorado feeds disagree on date format:
+      - the SODA API:    ``2025-06-16T00:00:00.000`` (ISO)
+      - the bulk export: ``06/16/2025``              (MM/DD/YYYY)
+    We try ISO first, then MM/DD/YYYY. Blank/unparseable returns None (never guesses).
     """
 
     if not value:
         return None
+    text = value.strip()
     try:
-        return date.fromisoformat(value[:10])  # take the YYYY-MM-DD prefix
+        return date.fromisoformat(text[:10])  # ISO: YYYY-MM-DD prefix
+    except ValueError:
+        pass
+    try:
+        return datetime.strptime(text, "%m/%d/%Y").date()  # bulk: MM/DD/YYYY
     except ValueError:
         return None
 

@@ -49,14 +49,20 @@ ROW_PERSON_AGENT = {
 }
 
 
-def test_parse_date_takes_date_prefix() -> None:
+def test_parse_date_iso_format_from_api() -> None:
     assert parse_co_date("2025-06-16T00:00:00.000") == date(2025, 6, 16)
+
+
+def test_parse_date_us_format_from_bulk_export() -> None:
+    # The bulk CSV uses MM/DD/YYYY — must parse to the same date as the ISO feed.
+    assert parse_co_date("06/16/2025") == date(2025, 6, 16)
 
 
 def test_parse_date_handles_blank_and_bad() -> None:
     assert parse_co_date("") is None
     assert parse_co_date(None) is None
     assert parse_co_date("not-a-date") is None
+    assert parse_co_date("2025/13/40") is None  # invalid pieces -> None, no crash
 
 
 def test_parse_record_organization_agent() -> None:
