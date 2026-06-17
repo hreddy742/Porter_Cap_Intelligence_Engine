@@ -34,7 +34,7 @@ export function CompanyProfile() {
   if (error) return <div className="error">{error}</div>;
   if (!profile) return <div className="empty">No profile.</div>;
 
-  const { company, registrations, officers, latest_run, scores, evidence } = profile;
+  const { company, registrations, agents, officers, latest_run, scores, evidence } = profile;
   const canReview = ["underwriter", "admin"].includes(getUser().role);
 
   return (
@@ -74,6 +74,30 @@ export function CompanyProfile() {
                   <td>{r.entity_type ?? "—"}</td>
                   <td>{r.status_raw ?? "—"}</td>
                   <td>{r.status_normalized}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      <div className="panel">
+        <h2>Registered agent</h2>
+        {agents.length === 0 ? (
+          <p className="empty">No registered agent on record.</p>
+        ) : (
+          <table>
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Address</th>
+              </tr>
+            </thead>
+            <tbody>
+              {agents.map((a, i) => (
+                <tr key={i}>
+                  <td>{a.agent_name ?? "—"}</td>
+                  <td>{a.agent_address ?? "— (restricted)"}</td>
                 </tr>
               ))}
             </tbody>

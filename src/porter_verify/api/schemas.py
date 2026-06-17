@@ -59,6 +59,13 @@ class RegistrationOut(BaseModel):
     status_normalized: RegistrationStatus
 
 
+class RegisteredAgentOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    agent_name: str | None
+    agent_address: str | None
+
+
 class OfficerOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -103,6 +110,7 @@ class EvidenceOut(BaseModel):
 class ProfileResponse(BaseModel):
     company: CompanySummary
     registrations: list[RegistrationOut]
+    agents: list[RegisteredAgentOut]
     officers: list[OfficerOut]
     latest_run: RunOut | None
     scores: list[ScoreComponentOut]

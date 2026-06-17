@@ -13,6 +13,7 @@ from porter_verify.api.schemas import (
     EvidenceOut,
     OfficerOut,
     ProfileResponse,
+    RegisteredAgentOut,
     RegistrationOut,
     RunOut,
     ScoreComponentOut,
@@ -72,9 +73,21 @@ def profile(
     can_see_pii = user.role in {*_SENSITIVE_ROLES, "admin"}
     officers = queries.officers_for(session, company_id) if can_see_pii else []
 
+    # Registered agent name is public record; the agent ADDRESS is PII-adjacent and
+    # is masked for non-sensitive roles.
+    agents = queries.agents_for(session, [r.id for r in registrations])
+    agent_out = [
+        RegisteredAgentOut(
+            agent_name=a.agent_name,
+            agent_address=a.agent_address if can_see_pii else None,
+        )
+        for a in agents
+    ]
+
     return ProfileResponse(
         company=_summary(company, run),
         registrations=[RegistrationOut.model_validate(r) for r in registrations],
+        agents=agent_out,
         officers=[OfficerOut.model_validate(o) for o in officers],
         latest_run=RunOut.model_validate(run) if run else None,
         scores=[ScoreComponentOut.model_validate(s) for s in scores],

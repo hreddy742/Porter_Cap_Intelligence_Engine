@@ -41,6 +41,11 @@ export interface Registration {
   status_normalized: string;
 }
 
+export interface RegisteredAgent {
+  agent_name: string | null;
+  agent_address: string | null;
+}
+
 export interface Officer {
   name: string;
   title: string | null;
@@ -79,6 +84,7 @@ export interface Evidence {
 export interface Profile {
   company: CompanySummary;
   registrations: Registration[];
+  agents: RegisteredAgent[];
   officers: Officer[];
   latest_run: Run | null;
   scores: ScoreComponent[];

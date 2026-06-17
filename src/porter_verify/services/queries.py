@@ -40,9 +40,16 @@ def search_companies(
 ) -> list[tuple[Company, VerificationRun | None]]:
     """Find companies whose normalized name contains the query (optionally by state)."""
 
+    needle = normalize_name(query)
+    # A query the user typed but that normalizes to "" (e.g. "...") is unsearchable
+    # -> match nothing (NOT everything via contains("")). A truly blank query falls
+    # through to a browse (no name filter).
+    if query.strip() and not needle:
+        return []
+
     stmt = select(Company)
-    if query.strip():
-        stmt = stmt.where(Company.normalized_name.contains(normalize_name(query)))
+    if needle:
+        stmt = stmt.where(Company.normalized_name.contains(needle))
     if state:
         stmt = stmt.where(Company.home_state == state.upper())
     stmt = stmt.order_by(Company.canonical_legal_name).limit(limit)

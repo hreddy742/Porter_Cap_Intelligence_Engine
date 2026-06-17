@@ -145,6 +145,21 @@ def test_officers_hidden_from_sales_shown_to_underwriter(client: TestClient) -> 
     assert len(uw_view.json()["officers"]) >= 1
 
 
+def test_registered_agent_surfaced_with_address_masking(client: TestClient) -> None:
+    _run_id, run = _verify_and_wait(client, "Acme Logistics LLC", "TX")
+    company_id = run["company_id"]
+
+    # Agent name is public record and shown to everyone (incl. sales).
+    sales = client.get(f"/companies/{company_id}/profile", headers=_headers("sales")).json()
+    assert len(sales["agents"]) >= 1
+    assert sales["agents"][0]["agent_name"] == "Jane Roe"
+    assert sales["agents"][0]["agent_address"] is None  # PII-adjacent: masked for sales
+
+    # Underwriter (sensitive role) sees the agent address.
+    uw = client.get(f"/companies/{company_id}/profile", headers=_headers("underwriter")).json()
+    assert uw["agents"][0]["agent_address"] is not None
+
+
 # --- evidence (sensitive read) --------------------------------------------
 
 

@@ -29,7 +29,7 @@ from porter_verify.connectors.base import (
     ConnectorRegistry,
     SourceUnavailableError,
 )
-from porter_verify.db.enums import EvidenceType, RunStatus, VerificationStatus
+from porter_verify.db.enums import EvidenceType, IdentifierType, RunStatus, VerificationStatus
 from porter_verify.db.models import ConfidenceScore, ErrorLog, RawSourceEvent, VerificationRun
 from porter_verify.logging_config import get_logger
 from porter_verify.services import companies
@@ -297,6 +297,28 @@ def _execute(
             cost_credits=float(source.cost_per_lookup),
         )
     )
+
+    # If the record vanished between search and fetch (4xx / empty), do NOT build a
+    # company from the user's query input — that would be a fabricated result.
+    if record.response_code >= 400 or not record.raw:
+        session.add(
+            ErrorLog(
+                source_id=source.id,
+                run_id=run.id,
+                error_type="fetch_failed",
+                message=f"fetch returned {record.response_code} for {chosen_result.reg_id}",
+            )
+        )
+        return _finalize(
+            session,
+            run,
+            run_status=RunStatus.COMPLETED,
+            verification_status=VerificationStatus.INSUFFICIENT_EVIDENCE,
+            actor=actor,
+            company_id=None,
+            message="The source record could not be retrieved; no profile was created.",
+        )
+
     evidence_store.store(
         session,
         verification_run_id=run.id,
@@ -332,6 +354,14 @@ def _execute(
         formation_date=formation,
         status_raw=raw.get("status_raw"),
         status_normalized=status_normalized,
+        source_id=source.id,
+    )
+    # Record the state registration number as a resolvable identifier.
+    companies.add_identifier(
+        session,
+        company=company,
+        id_type=IdentifierType.STATE_REG,
+        id_value=raw.get("reg_id", chosen_result.reg_id),
         source_id=source.id,
     )
     agent = raw.get("registered_agent") or {}

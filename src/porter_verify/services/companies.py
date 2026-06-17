@@ -14,10 +14,11 @@ from datetime import date, datetime
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from porter_verify.db.enums import RegistrationStatus
+from porter_verify.db.enums import IdentifierType, RegistrationStatus
 from porter_verify.db.models import (
     BusinessRegistration,
     Company,
+    CompanyIdentifier,
     CompanyOfficer,
     RegisteredAgent,
     SourceRegistry,
@@ -174,20 +175,55 @@ def add_officers(
     """Record officers with their OFAC screening result (where screened)."""
 
     screened = screened or {}
-    created: list[CompanyOfficer] = []
+    # Existing officer names for this company, so re-verification updates instead of
+    # duplicating (there is no DB uniqueness on company_officers).
+    existing = {
+        o.name: o
+        for o in session.scalars(
+            select(CompanyOfficer).where(CompanyOfficer.company_id == company.id)
+        )
+    }
+    touched: list[CompanyOfficer] = []
     for officer in officers:
         name = officer.get("name")
         if not name:
             continue
-        record = CompanyOfficer(
-            company_id=company.id,
-            name=name,
-            title=officer.get("title"),
-            address=officer.get("address"),
-            screened_ofac=screened.get(name),
-            source_id=source_id,
-        )
-        session.add(record)
-        created.append(record)
+        record = existing.get(name)
+        if record is None:
+            record = CompanyOfficer(company_id=company.id, name=name)
+            session.add(record)
+        record.title = officer.get("title")
+        record.address = officer.get("address")
+        record.screened_ofac = screened.get(name)
+        record.source_id = source_id
+        touched.append(record)
     session.flush()
-    return created
+    return touched
+
+
+def add_identifier(
+    session: Session,
+    *,
+    company: Company,
+    id_type: IdentifierType,
+    id_value: str | None,
+    source_id: uuid.UUID | None = None,
+) -> CompanyIdentifier | None:
+    """Record an external identifier (e.g. state reg #), deduped by (type, value)."""
+
+    if not id_value:
+        return None
+    existing = session.scalar(
+        select(CompanyIdentifier).where(
+            CompanyIdentifier.id_type == id_type,
+            CompanyIdentifier.id_value == id_value,
+        )
+    )
+    if existing is not None:
+        return existing
+    identifier = CompanyIdentifier(
+        company_id=company.id, id_type=id_type, id_value=id_value, source_id=source_id
+    )
+    session.add(identifier)
+    session.flush()
+    return identifier

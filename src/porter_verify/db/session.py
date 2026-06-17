@@ -43,11 +43,17 @@ def create_db_engine(settings: Settings | None = None) -> Engine:
         # SQLite needs foreign keys turned on, and a busy timeout so concurrent
         # background verifications wait for the write lock instead of erroring with
         # "database is locked".
+        is_memory = ":memory:" in url
+
         @event.listens_for(engine, "connect")
         def _sqlite_pragmas(dbapi_connection, _record):  # noqa: ANN001
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.execute("PRAGMA busy_timeout=5000")
+            # WAL lets the connector read staging while the verify flow holds a write
+            # transaction (file DB only; WAL is unavailable for in-memory).
+            if not is_memory:
+                cursor.execute("PRAGMA journal_mode=WAL")
             cursor.close()
 
         return engine
