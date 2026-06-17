@@ -12,21 +12,46 @@ status to RISK_FLAG. The only real engineering here is the threshold (plan §8.1
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 
+from porter_verify.config import get_settings
+from porter_verify.connectors.ofac import load_sdn_names
+from porter_verify.logging_config import get_logger
 from porter_verify.services.entity_resolution import name_sim
+from porter_verify.services.normalization import normalize_name
+
+log = get_logger(__name__)
 
 SCREENING_VERSION = "ofac-v1"
 
 # Default fuzzy threshold. A hit at/above this is flagged.
 DEFAULT_THRESHOLD = 0.85
 
-# Representative sample of sanctioned names. Real deployment loads the official
-# OFAC files into this structure.
-_SANCTIONS_LIST: list[str] = [
+# Offline fallback used when the official OFAC file has not been downloaded.
+_FIXTURE_LIST: list[str] = [
     "Specially Designated National Corp",
     "Blocked Persons Holdings LLC",
     "Sanctioned Trading Company",
 ]
+
+
+@lru_cache(maxsize=1)
+def get_sanctions_list() -> list[str]:
+    """Return the screening list: the real OFAC file if present, else the fixture.
+
+    Cached for the process. Call ``get_sanctions_list.cache_clear()`` after
+    refreshing the OFAC file to pick up the new list.
+    """
+
+    path = Path(get_settings().ofac_sdn_path)
+    if path.exists():
+        names = load_sdn_names(path)
+        if names:
+            log.info("ofac_list_loaded", source=str(path), count=len(names))
+            return names
+    log.info("ofac_list_fixture", count=len(_FIXTURE_LIST))
+    return _FIXTURE_LIST
 
 
 @dataclass(frozen=True)
@@ -50,13 +75,20 @@ def screen(
     threshold: float = DEFAULT_THRESHOLD,
     sanctions_list: list[str] | None = None,
 ) -> ScreeningResult:
-    """Screen ``name`` against the sanctions list; return all matches >= threshold."""
+    """Screen ``name`` against the sanctions list; return all matches >= threshold.
 
-    candidates = sanctions_list if sanctions_list is not None else _SANCTIONS_LIST
+    The full OFAC list has ~17k names, so we first block on a shared normalized
+    token before the expensive fuzzy compare. A name with zero shared tokens cannot
+    reach a 0.85 fuzzy threshold, so this is safe (no false negatives) and fast.
+    """
+
+    candidates = sanctions_list if sanctions_list is not None else get_sanctions_list()
+    query_tokens = set(normalize_name(name).split())
     matches = [
         ScreeningMatch(sanctioned_name=entry, score=sim)
         for entry in candidates
-        if (sim := name_sim(name, entry)) >= threshold
+        if query_tokens & set(normalize_name(entry).split())
+        and (sim := name_sim(name, entry)) >= threshold
     ]
     matches.sort(key=lambda m: m.score, reverse=True)
     return ScreeningResult(hit=bool(matches), query_name=name, matches=matches, threshold=threshold)

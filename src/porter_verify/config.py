@@ -53,6 +53,11 @@ class Settings(BaseSettings):
     # --- evidence store ---------------------------------------------------
     evidence_dir: str = "./evidence_store"
 
+    # --- OFAC sanctions list ----------------------------------------------
+    # Local copy of the official OFAC SDN CSV (populated by scripts/refresh_ofac.py).
+    # When absent, screening falls back to a small bundled fixture.
+    ofac_sdn_path: str = "./data/ofac_sdn.csv"
+
     # --- vendor / integration credential references -----------------------
     # Blank locally => the mock connector is used. Real values are secret-manager
     # references in production, surfaced to the process as env vars at runtime.

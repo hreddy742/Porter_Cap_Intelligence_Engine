@@ -14,8 +14,27 @@ from sqlalchemy import Engine, create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from porter_verify.config import get_settings
 from porter_verify.db import models  # noqa: F401  (registers all tables on metadata)
 from porter_verify.db.base import Base
+from porter_verify.services.screening import get_sanctions_list
+
+
+@pytest.fixture(autouse=True)
+def isolate_ofac_list(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Force every test to use the bundled OFAC fixture, not any local real file.
+
+    A developer who has run scripts/refresh_ofac.py has a real ~19k-name list on
+    disk; without this, screening results (and thus verify-flow outcomes) would
+    depend on that ambient file and become non-deterministic.
+    """
+
+    monkeypatch.setenv("PORTER_OFAC_SDN_PATH", "__no_such_ofac_file__.csv")
+    get_settings.cache_clear()
+    get_sanctions_list.cache_clear()
+    yield
+    get_settings.cache_clear()
+    get_sanctions_list.cache_clear()
 
 
 @pytest.fixture

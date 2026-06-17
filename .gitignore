@@ -29,6 +29,9 @@ coverage.xml
 evidence_store/
 /tmp/
 
+# Downloaded data artifacts (regenerable: scripts/refresh_ofac.py)
+data/
+
 # Node / React frontend
 node_modules/
 frontend/dist/
