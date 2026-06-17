@@ -56,9 +56,23 @@ docker compose up -d db
 # 4. Apply migrations  (available from Slice 1 onward)
 # alembic upgrade head
 
-# 5. Run the API  (available from the API slice onward)
-# uvicorn porter_verify.api.app:app --reload
+# 5. Run the API
+uvicorn porter_verify.api.app:app --reload      # serves on http://localhost:8000
 ```
+
+### Dashboard (React + Vite)
+
+```bash
+cd frontend
+npm install
+cp .env.example .env          # VITE_API_BASE defaults to http://localhost:8000
+npm run dev                   # serves on http://localhost:5173
+npm run build                 # type-check + production build
+```
+
+Pick an acting role from the header dropdown (stands in for SSO in the MVP) to see
+role-based access in action. Run a verification from **Home**, then open the
+company profile to see the score panel, evidence timeline, and review panel.
 
 ## Running tests
 

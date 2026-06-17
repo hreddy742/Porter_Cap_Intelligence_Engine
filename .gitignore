@@ -33,6 +33,7 @@ evidence_store/
 node_modules/
 frontend/dist/
 frontend/.vite/
+*.tsbuildinfo
 
 # Editors / OS
 .vscode/
