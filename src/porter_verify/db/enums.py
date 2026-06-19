@@ -72,3 +72,19 @@ class SyncStatus(StrEnum):
     PENDING = "pending"
     SYNCED = "synced"
     FAILED = "failed"
+
+
+class UccSearchStatus(StrEnum):
+    """Lifecycle of a manual UCC search coverage check."""
+
+    PENDING = "pending"
+    COMPLETED = "completed"
+
+
+class UccSearchOutcome(StrEnum):
+    """Conservative result vocabulary for a completed UCC name search."""
+
+    FILINGS_FOUND = "filings_found"
+    NO_MATCHING_FILINGS = "no_matching_filings"
+    POSSIBLE_MATCH = "possible_match"
+    SOURCE_UNAVAILABLE = "source_unavailable"

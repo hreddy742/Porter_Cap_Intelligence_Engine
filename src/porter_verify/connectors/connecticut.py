@@ -91,7 +91,7 @@ def parse_ct_record(row: dict) -> CtBusinessRecord:
         principal_address=principal_address or mailing_address,
         mailing_address=mailing_address,
         jurisdiction=_join(
-            row.get("state_or_territory_formation"),
+            row.get("state_or_territory_formation") or row.get("formation_place"),
             row.get("country_formation"),
         ),
         source_record_url=None,

@@ -56,6 +56,15 @@ def test_connecticut_current_schema_and_sentinel_date() -> None:
     assert record.mailing_address == "PO Box 9 Hartford CT 06101"
     assert record.jurisdiction == "Connecticut United States"
 
+    formation_place = parse_ct_record(
+        {
+            "accountnumber": "7654321",
+            "name": "Formation Place LLC",
+            "formation_place": "Connecticut",
+        }
+    )
+    assert formation_place.jurisdiction == "Connecticut"
+
 
 def test_oregon_long_rows_preserve_agent_representatives_and_raw() -> None:
     rows = [

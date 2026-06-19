@@ -11,12 +11,14 @@ import uuid
 from datetime import date, datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from porter_verify.db.enums import (
     RegistrationStatus,
     ReviewDecision,
     RunStatus,
+    UccSearchOutcome,
+    UccSearchStatus,
     VerificationStatus,
 )
 
@@ -48,6 +50,34 @@ class CompanySummary(BaseModel):
 
 class SearchResponse(BaseModel):
     results: list[CompanySummary]
+
+
+class RecentBusinessOut(BaseModel):
+    state: str
+    entity_id: str
+    legal_name: str
+    entity_type: str | None
+    registration_or_formation_date: date
+    date_basis: str
+    status_raw: str | None
+    jurisdiction: str | None
+    principal_address: str | None
+    source_record_url: str
+    domestic_signal: bool
+    active_signal: bool
+    nonprofit_signal: bool
+    relevant_entity_signal: bool
+
+
+class RecentBusinessFilters(BaseModel):
+    states: list[str]
+    formed_from: date
+    formed_to: date
+
+
+class RecentBusinessResponse(BaseModel):
+    results: list[RecentBusinessOut]
+    filters: RecentBusinessFilters
 
 
 class RegistrationOut(BaseModel):
@@ -113,6 +143,46 @@ class EvidenceOut(BaseModel):
     captured_at: datetime
 
 
+class UccSearchCreate(BaseModel):
+    state: str = Field(min_length=2, max_length=2, pattern=r"^[A-Za-z]{2}$")
+
+    @field_validator("state")
+    @classmethod
+    def normalize_state(cls, value: str) -> str:
+        return value.upper()
+
+
+class UccSearchComplete(BaseModel):
+    outcome: UccSearchOutcome
+    source_url: str = Field(min_length=1, max_length=1000)
+    notes: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("source_url")
+    @classmethod
+    def reject_blank_source(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("source_url cannot be blank")
+        return value
+
+
+class UccSearchOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    company_id: uuid.UUID
+    state: str
+    search_name: str
+    status: UccSearchStatus
+    outcome: UccSearchOutcome | None
+    source_url: str | None
+    notes: str | None
+    requested_by_email: str
+    completed_by_email: str | None
+    created_at: datetime
+    completed_at: datetime | None
+
+
 class ProfileResponse(BaseModel):
     company: CompanySummary
     registrations: list[RegistrationOut]
@@ -121,6 +191,7 @@ class ProfileResponse(BaseModel):
     latest_run: RunOut | None
     scores: list[ScoreComponentOut]
     evidence: list[EvidenceOut]
+    ucc_searches: list[UccSearchOut]
 
 
 class RunDetailResponse(BaseModel):

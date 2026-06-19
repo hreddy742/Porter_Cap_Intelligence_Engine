@@ -20,6 +20,7 @@ export function Layout() {
             Home
           </NavLink>
           <NavLink to="/search">Search</NavLink>
+          <NavLink to="/recent">Recent businesses</NavLink>
         </nav>
         <div className="row" style={{ alignItems: "center" }}>
           <span style={{ fontSize: "0.8rem", color: "#d7e6f3" }}>{user.email}</span>

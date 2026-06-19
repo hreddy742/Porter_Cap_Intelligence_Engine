@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -13,16 +14,26 @@ from porter_verify.api.schemas import (
     EvidenceOut,
     OfficerOut,
     ProfileResponse,
+    RecentBusinessFilters,
+    RecentBusinessOut,
+    RecentBusinessResponse,
     RegisteredAgentOut,
     RegistrationOut,
     RunOut,
     ScoreComponentOut,
     SearchResponse,
+    UccSearchOut,
 )
 from porter_verify.api.security import CurrentUser, get_current_user, require_roles
 from porter_verify.db.models import Company, VerificationRun
 from porter_verify.services import queries
 from porter_verify.services.audit import record_audit
+from porter_verify.services.recent_businesses import (
+    MODELS,
+    RecentBusinessRecord,
+    find_recent_businesses,
+    get_recent_business,
+)
 
 router = APIRouter(tags=["companies"])
 
@@ -43,6 +54,25 @@ def _summary(company: Company, run: VerificationRun | None) -> CompanySummary:
     )
 
 
+def _recent_out(item: RecentBusinessRecord) -> RecentBusinessOut:
+    return RecentBusinessOut(
+        state=item.state,
+        entity_id=item.entity.entity_id,
+        legal_name=item.entity.entity_name,
+        entity_type=item.entity.entity_type,
+        registration_or_formation_date=item.entity.formation_date,
+        date_basis=item.date_basis,
+        status_raw=item.entity.status_raw,
+        jurisdiction=item.jurisdiction,
+        principal_address=item.entity.principal_address,
+        source_record_url=item.source_record_url,
+        domestic_signal=item.domestic_signal,
+        active_signal=item.active_signal,
+        nonprofit_signal=item.nonprofit_signal,
+        relevant_entity_signal=item.relevant_entity_signal,
+    )
+
+
 @router.get("/companies", response_model=SearchResponse)
 def search(
     q: str = Query(default="", description="Name fragment to search for"),
@@ -52,6 +82,62 @@ def search(
 ) -> SearchResponse:
     rows = queries.search_companies(session, query=q, state=state)
     return SearchResponse(results=[_summary(c, r) for c, r in rows])
+
+
+@router.get("/recent-businesses", response_model=RecentBusinessResponse)
+def recent_businesses(
+    states: str = Query(default="CO,CT,OR,OH"),
+    formed_from: date | None = Query(default=None),
+    formed_to: date | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=200),
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(get_current_user),
+) -> RecentBusinessResponse:
+    """Recent registration feed with conservative, source-specific lead filters."""
+
+    selected_states = list(dict.fromkeys(s.strip().upper() for s in states.split(",") if s.strip()))
+    unsupported = sorted(set(selected_states) - set(MODELS))
+    if not selected_states or unsupported:
+        detail = "Choose at least one supported state."
+        if unsupported:
+            detail = f"Unsupported states: {', '.join(unsupported)}."
+        raise HTTPException(status_code=422, detail=detail)
+
+    end = formed_to or date.today()
+    start = formed_from or end - timedelta(days=30)
+    if start > end:
+        raise HTTPException(status_code=422, detail="formed_from must be on or before formed_to.")
+    records = find_recent_businesses(
+        session,
+        states=selected_states,
+        formed_from=start,
+        formed_to=end,
+        limit=limit,
+    )
+    return RecentBusinessResponse(
+        results=[_recent_out(item) for item in records],
+        filters=RecentBusinessFilters(
+            states=selected_states,
+            formed_from=start,
+            formed_to=end,
+        ),
+    )
+
+
+@router.get("/recent-businesses/{state}/{entity_id}", response_model=RecentBusinessOut)
+def recent_business_detail(
+    state: str,
+    entity_id: str,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(get_current_user),
+) -> RecentBusinessOut:
+    normalized_state = state.upper()
+    if normalized_state not in MODELS:
+        raise HTTPException(status_code=404, detail="Supported state not found.")
+    item = get_recent_business(session, state=normalized_state, entity_id=entity_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Business record not found.")
+    return _recent_out(item)
 
 
 @router.get("/companies/{company_id}/profile", response_model=ProfileResponse)
@@ -72,6 +158,7 @@ def profile(
     # Officers are PII — only sensitive roles see them (field-level access).
     can_see_pii = user.role in {*_SENSITIVE_ROLES, "admin"}
     officers = queries.officers_for(session, company_id) if can_see_pii else []
+    ucc_searches = queries.ucc_searches_for(session, company_id) if can_see_pii else []
 
     # Registered agent name is public record; the agent ADDRESS is PII-adjacent and
     # is masked for non-sensitive roles.
@@ -92,6 +179,7 @@ def profile(
         latest_run=RunOut.model_validate(run) if run else None,
         scores=[ScoreComponentOut.model_validate(s) for s in scores],
         evidence=[EvidenceOut.model_validate(e) for e in evidence],
+        ucc_searches=[UccSearchOut.model_validate(item) for item in ucc_searches],
     )
 
 

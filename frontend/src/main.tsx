@@ -6,6 +6,8 @@ import { Layout } from "./components/Layout";
 import { Home } from "./pages/Home";
 import { Search } from "./pages/Search";
 import { CompanyProfile } from "./pages/CompanyProfile";
+import { RecentBusinesses } from "./pages/RecentBusinesses";
+import { RecentBusinessDetail } from "./pages/RecentBusinessDetail";
 import "./styles.css";
 
 const router = createBrowserRouter([
@@ -15,6 +17,8 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <Home /> },
       { path: "search", element: <Search /> },
+      { path: "recent", element: <RecentBusinesses /> },
+      { path: "recent/:state/:entityId", element: <RecentBusinessDetail /> },
       { path: "company/:companyId", element: <CompanyProfile /> },
     ],
   },

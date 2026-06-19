@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
-import { api, ApiError, type Profile } from "../api";
+import { api, ApiError, type Profile, type UccSearch } from "../api";
 import { StatusBadge } from "../components/StatusBadge";
 import { getUser } from "../auth";
 
@@ -34,7 +34,7 @@ export function CompanyProfile() {
   if (error) return <div className="error">{error}</div>;
   if (!profile) return <div className="empty">No profile.</div>;
 
-  const { company, registrations, agents, officers, latest_run, scores, evidence } = profile;
+  const { company, registrations, agents, officers, latest_run, scores, evidence, ucc_searches } = profile;
   const canReview = ["underwriter", "admin"].includes(getUser().role);
 
   return (
@@ -208,10 +208,157 @@ export function CompanyProfile() {
         )}
       </div>
 
+      {!["sales", "ops"].includes(getUser().role) && (
+        <UccSearchPanel
+          companyId={company.id}
+          homeState={company.home_state}
+          searches={ucc_searches}
+          canManage={canReview}
+          onDone={load}
+        />
+      )}
+
       {canReview && latest_run && (
         <ReviewPanel runId={latest_run.id} onDone={load} />
       )}
     </>
+  );
+}
+
+function UccSearchPanel({
+  companyId,
+  homeState,
+  searches,
+  canManage,
+  onDone,
+}: {
+  companyId: string;
+  homeState: string | null;
+  searches: UccSearch[];
+  canManage: boolean;
+  onDone: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function createSearch() {
+    if (!homeState) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.createUccSearch(companyId, homeState);
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to create UCC search.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="panel">
+      <div className="row" style={{ justifyContent: "space-between" }}>
+        <div>
+          <h2>UCC search coverage</h2>
+          <p className="muted">Exact-name state searches. An outcome is not a legal conclusion.</p>
+        </div>
+        {canManage && (
+          <button type="button" disabled={busy || !homeState} onClick={createSearch}>
+            {busy ? "Creating…" : `Create ${homeState ?? "state"} search`}
+          </button>
+        )}
+      </div>
+      {error && <div className="error">{error}</div>}
+      {searches.length === 0 ? (
+        <p className="empty">No UCC search coverage recorded.</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>State</th>
+              <th>Exact name</th>
+              <th>Status</th>
+              <th>Outcome</th>
+              <th>Source</th>
+              <th>Requested</th>
+              {canManage && <th>Action</th>}
+            </tr>
+          </thead>
+          <tbody>
+            {searches.map((search) => (
+              <tr key={search.id}>
+                <td>{search.state}</td>
+                <td>{search.search_name}</td>
+                <td>{search.status}</td>
+                <td>{search.outcome?.replace(/_/g, " ") ?? "—"}</td>
+                <td>
+                  {search.source_url ? (
+                    <a href={search.source_url} target="_blank" rel="noreferrer">source</a>
+                  ) : "—"}
+                </td>
+                <td>{new Date(search.created_at).toLocaleString()}</td>
+                {canManage && (
+                  <td>
+                    {search.status === "pending" ? (
+                      <UccCompletionForm searchId={search.id} onDone={onDone} />
+                    ) : "Recorded"}
+                  </td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function UccCompletionForm({ searchId, onDone }: { searchId: string; onDone: () => void }) {
+  const [outcome, setOutcome] = useState("no_matching_filings");
+  const [sourceUrl, setSourceUrl] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api.completeUccSearch(searchId, outcome, sourceUrl.trim(), notes.trim());
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to complete UCC search.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form onSubmit={submit}>
+      {error && <div className="error">{error}</div>}
+      <select aria-label="UCC search outcome" value={outcome} onChange={(e) => setOutcome(e.target.value)}>
+        <option value="no_matching_filings">No matching filings</option>
+        <option value="filings_found">Filings found</option>
+        <option value="possible_match">Possible match</option>
+        <option value="source_unavailable">Source unavailable</option>
+      </select>
+      <input
+        aria-label="Official source URL"
+        type="url"
+        required
+        value={sourceUrl}
+        onChange={(e) => setSourceUrl(e.target.value)}
+        placeholder="Official source URL"
+      />
+      <input
+        aria-label="UCC search notes"
+        value={notes}
+        onChange={(e) => setNotes(e.target.value)}
+        placeholder="Notes (optional)"
+      />
+      <button type="submit" disabled={busy}>{busy ? "Saving…" : "Record outcome"}</button>
+    </form>
   );
 }
 

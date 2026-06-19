@@ -20,6 +20,7 @@ from porter_verify.db.models import (
     RegisteredAgent,
     SourceQualityDaily,
     SourceRegistry,
+    UccSearchOrder,
     VerificationRun,
 )
 from porter_verify.services.normalization import normalize_name
@@ -118,6 +119,16 @@ def evidence_for_company(session: Session, company_id: uuid.UUID) -> list[Eviden
             .join(VerificationRun, EvidenceItem.verification_run_id == VerificationRun.id)
             .where(VerificationRun.company_id == company_id)
             .order_by(EvidenceItem.captured_at.desc())
+        )
+    )
+
+
+def ucc_searches_for(session: Session, company_id: uuid.UUID) -> list[UccSearchOrder]:
+    return list(
+        session.scalars(
+            select(UccSearchOrder)
+            .where(UccSearchOrder.company_id == company_id)
+            .order_by(UccSearchOrder.created_at.desc())
         )
     )
 

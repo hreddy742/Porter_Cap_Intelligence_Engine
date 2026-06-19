@@ -13,7 +13,7 @@ from fastapi.responses import JSONResponse
 from sqlalchemy.orm import sessionmaker
 
 from porter_verify import __version__
-from porter_verify.api.routers import companies, health, review, runs, sources, verify
+from porter_verify.api.routers import companies, health, review, runs, sources, ucc, verify
 from porter_verify.config import Environment, Settings, get_settings
 from porter_verify.connectors.base import ConnectorRegistry
 from porter_verify.connectors.factory import build_default_registry
@@ -63,7 +63,7 @@ def create_app(
         allow_headers=["*"],
     )
 
-    for module in (health, verify, companies, runs, review, sources):
+    for module in (health, verify, companies, runs, review, sources, ucc):
         app.include_router(module.router)
 
     @app.exception_handler(Exception)

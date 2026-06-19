@@ -5,8 +5,7 @@
 
 import { getUser } from "./auth";
 
-const API_BASE =
-  import.meta.env.VITE_API_BASE ?? `${window.location.protocol}//${window.location.hostname}:8000`;
+const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
 export type VerificationStatus =
   | "verified"
@@ -32,6 +31,29 @@ export interface CompanySummary {
   status_normalized: string;
   verification_status: VerificationStatus | null;
   match_confidence: number | null;
+}
+
+export interface RecentBusiness {
+  state: string;
+  entity_id: string;
+  legal_name: string;
+  entity_type: string | null;
+  registration_or_formation_date: string;
+  date_basis: string;
+  status_raw: string | null;
+  jurisdiction: string | null;
+  principal_address: string | null;
+  source_record_url: string;
+  domestic_signal: boolean;
+  active_signal: boolean;
+  nonprofit_signal: boolean;
+  relevant_entity_signal: boolean;
+}
+
+export interface RecentBusinessFilters {
+  states: string[];
+  formed_from: string;
+  formed_to: string;
 }
 
 export interface Registration {
@@ -87,6 +109,26 @@ export interface Evidence {
   captured_at: string;
 }
 
+export interface UccSearch {
+  id: string;
+  company_id: string;
+  state: string;
+  search_name: string;
+  status: "pending" | "completed";
+  outcome:
+    | "filings_found"
+    | "no_matching_filings"
+    | "possible_match"
+    | "source_unavailable"
+    | null;
+  source_url: string | null;
+  notes: string | null;
+  requested_by_email: string;
+  completed_by_email: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+
 export interface Profile {
   company: CompanySummary;
   registrations: Registration[];
@@ -95,6 +137,7 @@ export interface Profile {
   latest_run: Run | null;
   scores: ScoreComponent[];
   evidence: Evidence[];
+  ucc_searches: UccSearch[];
 }
 
 export class ApiError extends Error {
@@ -108,7 +151,7 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const user = getUser();
-  const resp = await fetch(`${API_BASE}${path}`, {
+  const requestInit = {
     ...init,
     headers: {
       "Content-Type": "application/json",
@@ -116,7 +159,18 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       "X-User-Role": user.role,
       ...(init.headers ?? {}),
     },
-  });
+  };
+  let resp: Response;
+  try {
+    resp = await fetch(`${API_BASE}${path}`, requestInit);
+  } catch {
+    await new Promise((resolve) => window.setTimeout(resolve, 300));
+    try {
+      resp = await fetch(`${API_BASE}${path}`, requestInit);
+    } catch {
+      throw new ApiError(0, `Cannot reach the Porter API at ${API_BASE}.`);
+    }
+  }
   if (!resp.ok) {
     let detail = `Request failed (${resp.status})`;
     try {
@@ -141,6 +195,20 @@ export const api = {
     if (state) params.set("state", state);
     return request<{ results: CompanySummary[] }>(`/companies?${params.toString()}`);
   },
+  recentBusinesses: (filters: RecentBusinessFilters) => {
+    const params = new URLSearchParams({
+      states: filters.states.join(","),
+      formed_from: filters.formed_from,
+      formed_to: filters.formed_to,
+    });
+    return request<{ results: RecentBusiness[]; filters: RecentBusinessFilters }>(
+      `/recent-businesses?${params.toString()}`,
+    );
+  },
+  recentBusiness: (state: string, entityId: string) =>
+    request<RecentBusiness>(
+      `/recent-businesses/${encodeURIComponent(state)}/${encodeURIComponent(entityId)}`,
+    ),
   getRun: (runId: string) =>
     request<{ run: Run; scores: ScoreComponent[]; evidence: Evidence[] }>(`/runs/${runId}`),
   profile: (companyId: string) => request<Profile>(`/companies/${companyId}/profile`),
@@ -148,5 +216,15 @@ export const api = {
     request<{ id: string; run_id: string; decision: string }>(`/review/${runId}/decision`, {
       method: "POST",
       body: JSON.stringify({ decision, reason: reason || null }),
+    }),
+  createUccSearch: (companyId: string, state: string) =>
+    request<UccSearch>(`/companies/${companyId}/ucc-searches`, {
+      method: "POST",
+      body: JSON.stringify({ state }),
+    }),
+  completeUccSearch: (searchId: string, outcome: string, sourceUrl: string, notes: string) =>
+    request<UccSearch>(`/ucc-searches/${searchId}/complete`, {
+      method: "POST",
+      body: JSON.stringify({ outcome, source_url: sourceUrl, notes: notes || null }),
     }),
 };

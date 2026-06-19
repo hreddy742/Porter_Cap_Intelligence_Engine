@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Porter Lien Intelligence: Wolters Kluwer Analysis</title>
+  <style>
+    :root {
+      --ink: #171411;
+      --muted: #625b54;
+      --paper: #faf8f5;
+      --panel: #ffffff;
+      --line: #ded6cc;
+      --accent: #244f73;
+      --accent-soft: #eaf1f7;
+      --warn: #8a5a17;
+      --warn-soft: #fff4dc;
+      --good: #21623d;
+      --good-soft: #e8f5ed;
+      --bad: #8c2f2f;
+      --bad-soft: #faeaea;
+    }
+    * { box-sizing: border-box; }
+    body { font-family: Inter, ui-sans-serif, system-ui, sans-serif; margin: 0; background: var(--paper); color: var(--ink); }
+    main { max-width: 1120px; margin: 0 auto; padding: 44px 24px 72px; }
+    header, section { margin-bottom: 34px; }
+    h1 { font-size: clamp(32px, 5vw, 50px); letter-spacing: -0.035em; max-width: 900px; }
+    h1, h2, h3 { line-height: 1.14; margin: 0 0 14px; }
+    h2 { font-size: 27px; margin-top: 8px; }
+    h3 { font-size: 19px; }
+    p, li { line-height: 1.62; }
+    a { color: var(--accent); }
+    .eyebrow { color: var(--accent); font-size: 13px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+    .subtitle { color: var(--muted); font-size: 18px; max-width: 850px; }
+    .meta { color: var(--muted); font-size: 13px; }
+    .executive-summary-box { padding: 24px 26px; background: linear-gradient(180deg, #f4eee6, #ede5da); border: 1px solid #d9cdbc; border-radius: 18px; box-shadow: 0 12px 28px rgba(23,20,17,.06); }
+    .executive-summary-box ul { margin: 0; padding-left: 22px; }
+    .executive-summary-box li + li { margin-top: 11px; }
+    .callout { padding: 17px 19px; background: var(--accent-soft); border-left: 4px solid var(--accent); border-radius: 10px; }
+    .warning { background: var(--warn-soft); border-left-color: var(--warn); }
+    .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+    .card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+    .card p { margin-bottom: 0; }
+    .table-wrap { overflow-x: auto; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th { background: #eee8e0; text-align: left; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; }
+    th, td { padding: 13px 14px; vertical-align: top; border-bottom: 1px solid var(--line); }
+    tr:last-child td { border-bottom: 0; }
+    .status { display: inline-block; border-radius: 999px; padding: 4px 9px; font-size: 12px; font-weight: 750; white-space: nowrap; }
+    .status.good { color: var(--good); background: var(--good-soft); }
+    .status.warn { color: var(--warn); background: var(--warn-soft); }
+    .status.bad { color: var(--bad); background: var(--bad-soft); }
+    .phase { display: grid; grid-template-columns: 105px 1fr; gap: 18px; padding: 19px 0; border-bottom: 1px solid var(--line); }
+    .phase:last-child { border-bottom: 0; }
+    .phase-label { color: var(--accent); font-weight: 800; }
+    .small { color: var(--muted); font-size: 13px; }
+    code { background: #eee8e0; padding: 2px 5px; border-radius: 4px; }
+    @media (max-width: 760px) {
+      .grid { grid-template-columns: 1fr; }
+      .phase { grid-template-columns: 1fr; gap: 3px; }
+      main { padding: 28px 14px 52px; }
+    }
+  </style>
+</head>
+<body>
+  <main data-report-audience="product stakeholders">
+    <header data-contract-section="title">
+      <div class="eyebrow">Competitive and product strategy review</div>
+      <h1>Porter Lien Intelligence: What Lien Solutions Does and What We Should Build</h1>
+      <p class="subtitle">An evidence-backed analysis of Wolters Kluwer Lien Solutions, mapped to Porter's existing verification platform and factoring workflow.</p>
+      <p class="meta">Prepared June 19, 2026 | Scope: public product materials and current Porter codebase</p>
+    </header>
+
+    <section class="executive-summary-box" data-contract-section="executive-summary">
+      <h2>Executive Summary</h2>
+      <ul>
+        <li><strong>Lien Solutions is not a lien-search product alone.</strong> It covers pre-close public-record diligence, UCC preparation and filing, post-filing confirmation, monitoring, continuation, amendments, termination, portfolio reconciliation, analytics, and integrations across jurisdictions.</li>
+        <li><strong>Porter should build the decision and workflow layer, not pretend to recreate the national data-and-service network immediately.</strong> Our differentiator is resolving the correct borrower, interpreting filings for factoring collateral, controlling review, preserving evidence, and monitoring Porter's funded portfolio.</li>
+        <li><strong>The current Porter platform is a credible foundation but not yet a Lien Solutions substitute.</strong> We already own SOS identity resolution, OFAC screening, evidence hashing, audit, role-based review, source governance, and state connector infrastructure. We do not yet own UCC search results, filing operations, lien lifecycle records, portfolio monitoring, court/tax-lien coverage, or nationwide jurisdiction rules.</li>
+        <li><strong>The recommended first product is Porter Lien Intelligence.</strong> Begin with manual-assisted UCC diligence and portfolio perfection management for Porter's deals; add lawful state automation and filing integrations only after coverage, accuracy, permissions, and operational controls are proven.</li>
+      </ul>
+    </section>
+
+    <section data-contract-section="key-findings">
+      <h2>Lien Solutions spans the full secured-lending lifecycle</h2>
+      <p>Wolters Kluwer describes a single web platform for public-record searches, record retrieval, UCC-1 and UCC-3 preparation, portfolio tracking, recurring due diligence, monitoring, and role-based access. Its factoring page emphasizes nationwide electronic filing, borrower and lien transparency, and tools to maintain liens over time. This makes the product an operating system for secured interests, supported by jurisdictional expertise and service teams, rather than a single database query.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Lifecycle stage</th><th>Verified public capability</th><th>Why it matters to Porter</th></tr></thead>
+          <tbody>
+            <tr><td>Borrower onboarding</td><td>UCC, corporate, bankruptcy, tax-lien, judgment, litigation, legal-name and other public-record searches.</td><td>Establish identity, existing secured interests, legal distress, and the scope of manual review before funding.</td></tr>
+            <tr><td>Filing preparation</td><td>UCC-1, UCC-3, fixture, PMSI and other filing workflows with validation and jurisdiction-specific handling.</td><td>Reduce rejection and perfection risk caused by debtor-name, jurisdiction, collateral, or form errors.</td></tr>
+            <tr><td>Post-filing validation</td><td>Search-to-reflect, document retrieval, status visibility and centralized filing records.</td><td>Confirm that the filing was indexed correctly and detect subsequent interests.</td></tr>
+            <tr><td>Life-of-loan management</td><td>Continuation, amendment, assignment, subordination and termination workflows; expiration tracking.</td><td>Prevent accidental lapse and preserve priority while the obligation remains outstanding.</td></tr>
+            <tr><td>Monitoring</td><td>Alerts for debtor name/status changes, mergers, bankruptcies, new liens, UCC events and pending expirations.</td><td>Surface events that can affect perfection or collateral risk after a deal is funded.</td></tr>
+            <tr><td>Portfolio control</td><td>Portfolio Sync for filings created inside or outside iLien, document repository, reports, dashboards and scheduled analytics.</td><td>Create one defensible view of Porter's secured-interest portfolio instead of fragmented spreadsheets and portals.</td></tr>
+            <tr><td>Automation</td><td>APIs, workflow configuration, borrower analytics, recurring checks and automated continuation services.</td><td>Integrate risk signals into origination and servicing without removing human approval for consequential actions.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p class="small">Evidence: <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions">Lien Solutions overview</a>, <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions/markets/factoring">factoring market page</a>, <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions/ucc-filing-and-public-records-search">UCC and public-record suite</a>, and linked product pages.</p>
+    </section>
+
+    <section>
+      <h2>Porter owns the identity spine, but the lien operating layer is still missing</h2>
+      <p>The current platform already solves the prerequisite Wolters Kluwer assumes: selecting the correct legal entity and retaining evidence. That materially reduces false debtor matches. The gap begins after identity resolution, where a company-grade lien product needs search orders, jurisdiction coverage, filing families, lifecycle events, deadlines, approvals, portfolio ownership, and recurring monitoring.</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Capability</th><th>Porter today</th><th>Lien Solutions public position</th><th>Gap decision</th></tr></thead>
+          <tbody>
+            <tr><td>SOS identity and status</td><td><span class="status good">Working</span> CO, CT and OR full datasets; OH connector awaiting accessible source.</td><td>Corporate records and entity/debtor monitoring nationwide.</td><td>Keep building as Porter's owned identity and change-detection layer.</td></tr>
+            <tr><td>OFAC screening</td><td><span class="status good">Working</span> Entity and available officer screening with evidence.</td><td>Watch-list services are offered within public-record search.</td><td>Retain internally; expand refresh and alias handling.</td></tr>
+            <tr><td>Evidence, audit and review</td><td><span class="status good">Working</span> Immutable raw evidence, hashes, scores, audit and reviewer decisions.</td><td>Central records, reporting, role-based workflow and service support.</td><td>Extend the existing controls to every UCC search, filing and lifecycle action.</td></tr>
+            <tr><td>UCC search and matching</td><td><span class="status bad">Not implemented</span></td><td>Nationwide multi-jurisdiction searching and record retrieval.</td><td>Build search workflow and matching; obtain lawful source access per jurisdiction or provider.</td></tr>
+            <tr><td>UCC filing</td><td><span class="status bad">Not implemented</span></td><td>Nationwide UCC-1/UCC-3 and specialized filing workflows.</td><td>Build preparation, approval and tracking first; direct submission needs filing interfaces, fees and operating controls.</td></tr>
+            <tr><td>Lien lifecycle</td><td><span class="status bad">Not implemented</span></td><td>Search-to-reflect, amendments, continuations, assignments, subordinations and terminations.</td><td>Build an internal system of record with dual-control tasks and deadline rules.</td></tr>
+            <tr><td>Monitoring and alerts</td><td><span class="status warn">Foundation only</span> Source refresh and current-state data exist; no portfolio diff or alert engine.</td><td>Recurring public-record monitoring and configurable alerts.</td><td>Begin with SOS/entity changes and lien expirations; add UCC events as sources permit.</td></tr>
+            <tr><td>Portfolio reconciliation</td><td><span class="status bad">Not implemented</span></td><td>Unified view of liens filed through any channel.</td><td>Build CSV/import reconciliation and filing ownership before external synchronization.</td></tr>
+            <tr><td>Borrower analytics</td><td><span class="status warn">Partial foundation</span> Explainable entity confidence scoring only.</td><td>Analysis of UCC documents, debtor/collateral histories and aggregate lien conditions.</td><td>Use deterministic rules first; AI extraction only with reviewer-visible source citations.</td></tr>
+            <tr><td>Real property and vehicle titles</td><td><span class="status bad">Out of scope</span></td><td>Separate real-property search/recordation and title offerings.</td><td>Defer unless Porter identifies a material factoring use case.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>The right target is a Porter-specific lien control system</h2>
+      <div class="grid">
+        <div class="card">
+          <h3>Build and own</h3>
+          <ul>
+            <li>Borrower/legal-entity resolution and alias set</li>
+            <li>Search orders, checked jurisdictions and coverage status</li>
+            <li>Debtor/filing match confidence and review queue</li>
+            <li>Collateral classification focused on receivables and blanket liens</li>
+            <li>Porter lien-position view and underwriting rules</li>
+            <li>Evidence, audit, approvals and separation of duties</li>
+            <li>Portfolio deadlines, tasks, monitoring and reporting</li>
+            <li>Salesforce/deal integration and Porter-specific decisions</li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Source or integrate</h3>
+          <ul>
+            <li>Nationwide official UCC search records and document images</li>
+            <li>Electronic filing submission and jurisdiction fee handling</li>
+            <li>County fixture/real-property record access</li>
+            <li>Federal/state court, judgment, bankruptcy and tax-lien coverage</li>
+            <li>Jurisdiction-specific legal and operational rule maintenance</li>
+            <li>Guaranteed turnaround, service escalation and filing remediation</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout warning">
+        <strong>Honest boundary:</strong> software can reproduce the workflow and decision layer, but not Wolters Kluwer's nationwide data rights, filing relationships, jurisdictional operations, document fulfillment, and expert service merely by scraping public websites. A free first version must say exactly what was checked and retain a human-controlled official-search step.
+      </div>
+    </section>
+
+    <section data-contract-section="recommended-next-steps">
+      <h2>Recommended build sequence</h2>
+      <div class="phase">
+        <div class="phase-label">Phase 0</div>
+        <div><strong>Define the controlled product boundary.</strong> Approve jurisdictions, permitted acquisition methods, filing authority, retention, user roles, reviewer responsibilities, and language rules. Prohibit unsupported labels such as <code>clear</code>, <code>no liens</code>, or <code>perfected</code>.</div>
+      </div>
+      <div class="phase">
+        <div class="phase-label">Phase 1</div>
+        <div><strong>Manual-assisted UCC diligence.</strong> Create search orders from the verified SOS entity, generate legal-name/alias variants, track states and filing offices checked, capture official result PDFs/screenshots, enter/parse filings, score debtor matches, classify collateral, and produce an underwriting-ready lien section.</div>
+      </div>
+      <div class="phase">
+        <div class="phase-label">Phase 2</div>
+        <div><strong>Porter lien portfolio.</strong> Import Porter's existing UCC-1/UCC-3 records, model filing families and events, calculate lapse/continuation windows, assign owners, maintain document versions, and generate deadline queues and scheduled reports.</div>
+      </div>
+      <div class="phase">
+        <div class="phase-label">Phase 3</div>
+        <div><strong>Post-close monitoring.</strong> Diff SOS names, statuses, mergers and jurisdictions; alert on expirations and internal task failures; schedule recurring official UCC searches where lawful; require reviewer confirmation for new possible matches.</div>
+      </div>
+      <div class="phase">
+        <div class="phase-label">Phase 4</div>
+        <div><strong>Controlled filing preparation.</strong> Generate UCC-1/UCC-3 work packets, validate required data, enforce maker-checker approval, export forms, ingest acknowledgements/rejections, and run search-to-reflect. Add direct e-filing only through approved official or commercial interfaces.</div>
+      </div>
+      <div class="phase">
+        <div class="phase-label">Phase 5</div>
+        <div><strong>Public-record and analytics expansion.</strong> Add bankruptcy, judgment, litigation and tax-lien connectors; build portfolio dashboards; add document extraction with field-level citations and mandatory human review.</div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Company-grade acceptance gates</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Control area</th><th>Release requirement</th></tr></thead>
+          <tbody>
+            <tr><td>Coverage honesty</td><td>Every result lists names, jurisdictions, filing offices, source timestamps and states not checked. Source failure can never become a negative result.</td></tr>
+            <tr><td>Entity matching</td><td>Golden-set testing covers exact names, suffixes, former names, DBAs, common names and false positives. Consequential ambiguous matches require review.</td></tr>
+            <tr><td>Filing safety</td><td>No submission without maker-checker approval, idempotency, fee confirmation, immutable payload, acknowledgement and rejection handling.</td></tr>
+            <tr><td>Lifecycle integrity</td><td>Original filing and all UCC-3 events form an immutable family; deadline calculations are tested by jurisdiction and filing type.</td></tr>
+            <tr><td>Evidence</td><td>Raw result, document image, search criteria, response metadata and hash are preserved separately from normalized conclusions.</td></tr>
+            <tr><td>Security</td><td>Least privilege, sensitive-document controls, encryption, audit, retention and export restrictions are enforced server-side.</td></tr>
+            <tr><td>Operations</td><td>Source health, queue age, rejection rate, missed-deadline risk, stale monitoring and unresolved alerts have owners and escalation paths.</td></tr>
+            <tr><td>Legal language</td><td>The product provides sourced workflow support, not legal opinions on perfection, priority or enforceability. Counsel/credit owns final conclusions.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <section data-contract-section="further-questions">
+      <h2>Decisions required before implementation</h2>
+      <ol>
+        <li>Does Porter initially need pre-close lien discovery only, or also UCC filing and post-close servicing?</li>
+        <li>Which states and filing offices represent the highest share of Porter's funded deals?</li>
+        <li>Who is legally and operationally authorized to approve and submit financing statements?</li>
+        <li>Where are Porter's existing filing records, continuation calendars and document images maintained today?</li>
+        <li>What finding types change credit decisions: blanket liens, A/R collateral, tax liens, judgments, bankruptcies, or all of them?</li>
+        <li>What false-positive and false-negative thresholds will Credit accept before automated recommendations are allowed?</li>
+      </ol>
+    </section>
+
+    <section data-contract-section="caveats-and-assumptions">
+      <h2>Caveats and Assumptions</h2>
+      <div class="callout">
+        <p>This analysis uses Wolters Kluwer's public marketing and product-detail pages, not a contracted product demonstration, private API specification, pricing schedule, service-level agreement, data-coverage schedule, security package, or customer contract. Public claims establish advertised capability, not independently verified accuracy or performance. Porter's final build-versus-buy decision requires a controlled vendor demonstration and a golden-set comparison using real Porter deals.</p>
+      </div>
+      <p class="small">Primary evidence: <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions">overview</a>, <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions/markets/factoring">factoring</a>, <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions/ucc-filing-and-public-records-search/public-records-search">public-record search</a>, <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions/ucc-filing-and-public-records-search/lien-filings">filings</a>, <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions/ucc-filing-and-public-records-search/lien-management">lien management</a>, <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions/ucc-filing-and-public-records-search/lien-management/monitoring">monitoring</a>, <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions/ucc-filing-and-public-records-search/lien-management/portfolio-sync">portfolio sync</a>, and <a href="https://www.wolterskluwer.com/en/solutions/lien-solutions/ucc-filing-and-public-records-search/ilien-borrower-analytics">borrower analytics</a>.</p>
+    </section>
+  </main>
+</body>
+</html>

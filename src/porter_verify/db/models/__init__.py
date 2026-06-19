@@ -25,6 +25,7 @@ from porter_verify.db.models.staging import (
     OhBusinessEntity,
     OrBusinessEntity,
 )
+from porter_verify.db.models.ucc import UccSearchOrder
 from porter_verify.db.models.user import Role, User
 from porter_verify.db.models.verification import (
     ConfidenceScore,
@@ -57,5 +58,6 @@ __all__ = [
     "SourceQualityDaily",
     "SourceRegistry",
     "User",
+    "UccSearchOrder",
     "VerificationRun",
 ]
