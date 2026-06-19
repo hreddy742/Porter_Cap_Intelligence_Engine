@@ -74,6 +74,12 @@ Pick an acting role from the header dropdown (stands in for SSO in the MVP) to s
 role-based access in action. Run a verification from **Home**, then open the
 company profile to see the score panel, evidence timeline, and review panel.
 
+### Four-state data refresh
+
+Colorado, Connecticut, Oregon, and Ohio have direct state connectors. See
+[`docs/four_state_review.md`](docs/four_state_review.md) for coverage, refresh
+commands, source limitations, and the review checklist.
+
 ## Running tests
 
 ```bash
@@ -106,6 +112,6 @@ infra/                 # CI, deployment
 
 ## Status
 
-MVP under active development on branch `claude/porter-verify-mvp`. See
+MVP under active development. See
 [`docs/development_plan.md`](docs/development_plan.md) for the build sequence and
 [`docs/testing.md`](docs/testing.md) for the test strategy.

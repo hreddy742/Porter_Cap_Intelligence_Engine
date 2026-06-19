@@ -94,3 +94,14 @@ def test_score_exposes_all_components() -> None:
 def test_needs_review_property_flags_low_match() -> None:
     # match_confidence 0.80 < 0.92 -> entity_match component triggers review.
     assert score(_inp(match_confidence=0.80)).needs_review is True
+
+
+def test_evidence_exactly_30_days_old_is_still_fresh() -> None:
+    # FRESH_DAYS = 30 is the inclusive boundary; age==30 is "fresh" not "partially stale".
+    # Before the fix: age < 30 was used, so age=30 fell into LIKELY_MATCH.
+    assert derive_overall_status(_inp(evidence_age_days=30)) is VerificationStatus.VERIFIED
+
+
+def test_evidence_31_days_old_is_not_fully_fresh() -> None:
+    # One day past the boundary must NOT be VERIFIED (it should be LIKELY_MATCH).
+    assert derive_overall_status(_inp(evidence_age_days=31)) is VerificationStatus.LIKELY_MATCH

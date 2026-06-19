@@ -62,6 +62,11 @@ export function CompanyProfile() {
                 <th>State</th>
                 <th>Entity ID</th>
                 <th>Type</th>
+                <th>Formed</th>
+                <th>Address</th>
+                <th>Mailing</th>
+                <th>Jurisdiction</th>
+                <th>Source</th>
                 <th>Raw status</th>
                 <th>Normalized</th>
               </tr>
@@ -72,6 +77,15 @@ export function CompanyProfile() {
                   <td>{r.state}</td>
                   <td>{r.state_entity_id}</td>
                   <td>{r.entity_type ?? "—"}</td>
+                  <td>{r.formation_date ?? "—"}</td>
+                  <td>{r.principal_address ?? "—"}</td>
+                  <td>{r.mailing_address ?? "—"}</td>
+                  <td>{r.jurisdiction ?? "—"}</td>
+                  <td>
+                    {r.source_record_url ? (
+                      <a href={r.source_record_url} target="_blank" rel="noreferrer">record</a>
+                    ) : "—"}
+                  </td>
                   <td>{r.status_raw ?? "—"}</td>
                   <td>{r.status_normalized}</td>
                 </tr>

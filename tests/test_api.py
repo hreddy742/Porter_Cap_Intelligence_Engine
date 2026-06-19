@@ -67,6 +67,20 @@ def test_health_is_public(client: TestClient) -> None:
     assert resp.json()["status"] == "ok"
 
 
+def test_local_127_origin_passes_cors_preflight(client: TestClient) -> None:
+    resp = client.options(
+        "/verify",
+        headers={
+            "Origin": "http://127.0.0.1:5173",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,x-user-email,x-user-role",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert resp.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
+
+
 # --- auth boundary --------------------------------------------------------
 
 
@@ -210,3 +224,50 @@ def test_source_health_requires_ops_or_admin(client: TestClient) -> None:
     ok = client.get("/sources/health", headers=_headers("ops"))
     assert ok.status_code == 200
     assert any(s["name"] == "mock_vendor" for s in ok.json())
+
+
+def test_admin_can_govern_source_and_ops_can_read_policy(client: TestClient) -> None:
+    client.post(
+        "/verify", json={"name": "Acme Logistics LLC", "state": "TX"}, headers=_headers("ops")
+    )
+    payload = {
+        "acquisition_method": "vendor",
+        "legal_review_status": "approved",
+        "allowed_purposes": ["business_verification", "lead_qualification"],
+        "retention_days": 365,
+        "freshness_sla_hours": 24,
+        "terms_url": "https://vendor.example/terms",
+        "owner": "data-ops@portercap.net",
+    }
+
+    forbidden = client.put(
+        "/sources/mock_vendor/policy", json=payload, headers=_headers("ops")
+    )
+    assert forbidden.status_code == 403
+
+    updated = client.put(
+        "/sources/mock_vendor/policy", json=payload, headers=_headers("admin")
+    )
+    assert updated.status_code == 200
+    assert updated.json()["approved_by"] == "admin@portercap.net"
+
+    health = client.get("/sources/health", headers=_headers("ops")).json()
+    source = next(item for item in health if item["name"] == "mock_vendor")
+    assert source["policy"]["allowed_purposes"] == [
+        "business_verification",
+        "lead_qualification",
+    ]
+    assert source["cost_per_lookup"] == 0.0
+
+
+def test_source_policy_unknown_source_returns_404(client: TestClient) -> None:
+    response = client.put(
+        "/sources/missing/policy",
+        json={
+            "acquisition_method": "vendor",
+            "legal_review_status": "pending",
+            "allowed_purposes": [],
+        },
+        headers=_headers("admin"),
+    )
+    assert response.status_code == 404

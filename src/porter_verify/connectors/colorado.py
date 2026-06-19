@@ -18,6 +18,7 @@ Real column names (confirmed from the live dataset):
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import date, datetime
 
@@ -32,6 +33,10 @@ class CoBusinessRecord:
     entity_type: str | None
     formation_date: date | None
     principal_address: str | None
+    mailing_address: str | None
+    jurisdiction: str | None
+    source_record_url: str | None
+    officers: list[dict]
     agent_name: str | None
     agent_address: str | None
     raw: dict
@@ -89,7 +94,29 @@ def _address(row: dict, prefix: str) -> str | None:
         row.get(f"{prefix}city"),
         row.get(f"{prefix}state"),
         row.get(f"{prefix}zipcode"),
+        row.get(f"{prefix}country"),
     )
+
+
+# The CO bulk export appends the dissolution/delinquency status and its effective
+# date into the entityname field for many inactive entities, e.g.
+# "SOUTHWEST CONTRACTING, LLC, Delinquent May 1, 2016". The status is already in
+# the separate entitystatus column, so this trailing clause is redundant and
+# corrupts the legal name (and the normalized_name search index). Strip it.
+# Anchored on a trailing 4-digit year so legitimate names are left untouched, and
+# only the trailing clause is removed (interior commas like ", INC." are kept).
+_STATUS_SUFFIX = re.compile(
+    r",\s*(?:Voluntarily\s+|Administratively\s+)?"
+    r"(?:Delinquent|Dissolved|Withdrawn|Revoked|Expired|Suspended|Forfeited|Noncompliant)\b"
+    r".*\d{4}\s*$",
+    re.IGNORECASE,
+)
+
+
+def _clean_legal_name(raw_name: str) -> str:
+    """Strip a trailing '<status> <date>' clause the bulk export embeds in names."""
+
+    return _STATUS_SUFFIX.sub("", raw_name).strip()
 
 
 def parse_record(row: dict) -> CoBusinessRecord:
@@ -101,12 +128,19 @@ def parse_record(row: dict) -> CoBusinessRecord:
 
     return CoBusinessRecord(
         entity_id=(row.get("entityid") or "").strip(),
-        legal_name=(row.get("entityname") or "").strip(),
+        legal_name=_clean_legal_name((row.get("entityname") or "").strip()),
         status_raw=(row.get("entitystatus") or "").strip() or None,
         entity_type=(row.get("entitytype") or "").strip() or None,
         formation_date=parse_co_date(row.get("entityformdate")),
         principal_address=_address(row, "principal"),
+        mailing_address=_address(row, "mailing"),
+        jurisdiction=(
+            row.get("jurisdictonofformation") or row.get("jurisdictionofformation") or ""
+        ).strip()
+        or None,
+        source_record_url=None,
+        officers=[],
         agent_name=_agent_name(row),
-        agent_address=_address(row, "agentprincipal"),
+        agent_address=_address(row, "agentprincipal") or _address(row, "agentmailing"),
         raw=dict(row),
     )

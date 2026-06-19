@@ -7,9 +7,19 @@ Credentials hold only secret *references* — never plaintext keys.
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Numeric, String
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    Date,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Numeric,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from porter_verify.db.base import Base, TimestampMixin, uuid_pk
@@ -31,6 +41,12 @@ class SourceRegistry(Base, TimestampMixin):
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
     credentials: Mapped[list[SourceCredential]] = relationship(back_populates="source")
+    policy: Mapped[SourcePolicy | None] = relationship(
+        back_populates="source", cascade="all, delete-orphan", uselist=False
+    )
+    quality_daily: Mapped[list[SourceQualityDaily]] = relationship(
+        back_populates="source", cascade="all, delete-orphan"
+    )
 
 
 class SourceCredential(Base, TimestampMixin):
@@ -46,3 +62,45 @@ class SourceCredential(Base, TimestampMixin):
     rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     source: Mapped[SourceRegistry] = relationship(back_populates="credentials")
+
+
+class SourcePolicy(Base, TimestampMixin):
+    """Governance rules that must be known before a source reaches production."""
+
+    __tablename__ = "source_policies"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    source_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("source_registry.id"), unique=True, nullable=False
+    )
+    acquisition_method: Mapped[str] = mapped_column(String(30), default="unknown", nullable=False)
+    legal_review_status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
+    allowed_purposes: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    retention_days: Mapped[int | None] = mapped_column(Integer)
+    freshness_sla_hours: Mapped[int | None] = mapped_column(Integer)
+    terms_url: Mapped[str | None] = mapped_column(String(1000))
+    owner: Mapped[str | None] = mapped_column(String(320))
+    approved_by: Mapped[str | None] = mapped_column(String(320))
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    source: Mapped[SourceRegistry] = relationship(back_populates="policy")
+
+
+class SourceQualityDaily(Base, TimestampMixin):
+    """Daily source reliability, freshness, and cost measurements."""
+
+    __tablename__ = "source_quality_daily"
+    __table_args__ = (UniqueConstraint("source_id", "metric_date", name="source_quality_day"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    source_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("source_registry.id"), nullable=False)
+    metric_date: Mapped[date] = mapped_column(Date, nullable=False)
+    request_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    success_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    record_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    avg_latency_ms: Mapped[int | None] = mapped_column(Integer)
+    freshness_pass_rate: Mapped[float | None] = mapped_column(Numeric(5, 4))
+    estimated_cost: Mapped[float] = mapped_column(Numeric(12, 3), default=0, nullable=False)
+    schema_drift_detected: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    source: Mapped[SourceRegistry] = relationship(back_populates="quality_daily")

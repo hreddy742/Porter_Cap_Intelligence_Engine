@@ -193,6 +193,23 @@ def _execute(
     session.flush()
     log.info("verification_started", run_id=str(run.id), name=name, state=state)
 
+    # 0. Pre-screen the query name against OFAC before any registry lookup.
+    # A sanctioned entity may have no state registry record at all; screening only
+    # after a successful fetch would miss them entirely. A name hit here blocks the
+    # run immediately — no connector charge, no company created.
+    pre_screen = screen(name)
+    if pre_screen.hit:
+        run.risk_score = 1.0
+        return _finalize(
+            session,
+            run,
+            run_status=RunStatus.COMPLETED,
+            verification_status=VerificationStatus.RISK_FLAG,
+            actor=actor,
+            company_id=None,
+            message="Query name matches OFAC sanctions list; verification blocked.",
+        )
+
     # 1. Pick a connector that can report status for this state.
     connector = registry.select(state=state, capability=CAP_STATUS)
     if connector is None:
@@ -281,6 +298,24 @@ def _execute(
     chosen = resolution.chosen
     assert chosen is not None  # rank_results always returns a chosen when results exist
     match_confidence = chosen.score
+
+    # A below-threshold result (NO_MATCH) is not a confirmation. Do not fetch,
+    # charge the source, or persist a canonical company from it — building a
+    # company off a weak/likely-wrong match fabricates a record the source never
+    # actually confirmed. NEEDS_REVIEW and above proceed (review still needs the
+    # company record). The best candidate's score is recorded for the audit trail.
+    if resolution.outcome is Outcome.NO_MATCH:
+        run.match_confidence = match_confidence
+        return _finalize(
+            session,
+            run,
+            run_status=RunStatus.COMPLETED,
+            verification_status=VerificationStatus.INSUFFICIENT_EVIDENCE,
+            actor=actor,
+            company_id=None,
+            message="No candidate met the match threshold; no profile was created.",
+        )
+
     chosen_result = next(r for r in results if r.reg_id == chosen.candidate.reg_id)
 
     # 5. Fetch the full record, preserve raw + capture immutable evidence.
@@ -352,6 +387,10 @@ def _execute(
         state_entity_id=raw.get("reg_id", chosen_result.reg_id),
         entity_type=raw.get("entity_type"),
         formation_date=formation,
+        principal_address=raw.get("address"),
+        mailing_address=raw.get("mailing_address"),
+        jurisdiction=raw.get("jurisdiction"),
+        source_record_url=raw.get("source_url"),
         status_raw=raw.get("status_raw"),
         status_normalized=status_normalized,
         source_id=source.id,

@@ -1,22 +1,18 @@
-"""Ingest the Colorado bulk CSV into the staging table.
-
-Streams the file row-by-row (the full dataset is large), parses each row with the
-pure functions in ``colorado.py``, and upserts into ``co_business_entities`` keyed
-by the state's entity id. Re-running is idempotent — existing rows are updated, not
-duplicated. Commits in batches to keep memory flat.
-"""
+"""Stream Ohio business CSV or ZIP exports into the Ohio staging table."""
 
 from __future__ import annotations
 
 import csv
+import io
+import zipfile
 from collections.abc import Iterator
 from pathlib import Path
 
 from sqlalchemy.orm import Session
 
-from porter_verify.connectors.colorado import parse_record
+from porter_verify.connectors.ohio import parse_oh_record
 from porter_verify.connectors.staging_upsert import upsert_staging_rows
-from porter_verify.db.models import CoBusinessEntity
+from porter_verify.db.models import OhBusinessEntity
 from porter_verify.logging_config import get_logger
 from porter_verify.services.normalization import normalize_name
 
@@ -24,33 +20,36 @@ log = get_logger(__name__)
 
 
 def _rows(path: Path) -> Iterator[dict]:
-    """Yield CSV rows as dicts (streamed, not loaded all at once)."""
+    if path.suffix.lower() == ".zip":
+        with zipfile.ZipFile(path) as archive:
+            names = sorted(name for name in archive.namelist() if name.lower().endswith(".csv"))
+            if not names:
+                raise ValueError("Ohio ZIP contains no CSV file")
+            with (
+                archive.open(names[0]) as raw,
+                io.TextIOWrapper(raw, encoding="utf-8-sig", errors="ignore", newline="") as text,
+            ):
+                yield from csv.DictReader(text)
+        return
+    with path.open(encoding="utf-8-sig", errors="ignore", newline="") as text:
+        yield from csv.DictReader(text)
 
-    with path.open(encoding="utf-8", errors="ignore", newline="") as f:
-        yield from csv.DictReader(f)
 
-
-def ingest_co_csv(
+def ingest_oh_file(
     session: Session,
     path: str | Path,
     *,
-    batch_size: int = 1000,
+    batch_size: int = 1_000,
     limit: int | None = None,
 ) -> int:
-    """Upsert rows from the Colorado CSV at ``path``. Returns the row count.
+    """Upsert every valid Ohio row; returns the number of entities written."""
 
-    Rows without an entity id or name are skipped (can't be keyed or searched).
-    ``limit`` caps how many valid rows to ingest (useful for dev/demo seeding of the
-    very large full dataset); ``None`` ingests everything.
-    """
-
-    path = Path(path)
     count = 0
     pending: list[dict] = []
-    for row in _rows(path):
+    for row in _rows(Path(path)):
         if limit is not None and count >= limit:
             break
-        record = parse_record(row)
+        record = parse_oh_record(row)
         if not record.entity_id or not record.legal_name:
             continue
         pending.append(
@@ -73,11 +72,11 @@ def ingest_co_csv(
         )
         count += 1
         if len(pending) >= batch_size:
-            upsert_staging_rows(session, CoBusinessEntity, pending)
+            upsert_staging_rows(session, OhBusinessEntity, pending)
             session.commit()
             pending.clear()
-            log.info("co_ingest_progress", rows=count)
-    upsert_staging_rows(session, CoBusinessEntity, pending)
+            log.info("oh_ingest_progress", rows=count)
+    upsert_staging_rows(session, OhBusinessEntity, pending)
     session.commit()
-    log.info("co_ingest_complete", rows=count)
+    log.info("oh_ingest_complete", rows=count)
     return count

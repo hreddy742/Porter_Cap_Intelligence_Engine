@@ -44,7 +44,11 @@ def _to_raw(row: CoBusinessEntity) -> dict:
         "registered_agent": {"name": row.agent_name, "address": row.agent_address},
         "officers": [],  # Colorado's dataset lists the agent, not officers.
         "address": row.principal_address,
-        "source_url": CO_DATASET_URL,
+        "mailing_address": row.mailing_address,
+        "jurisdiction": row.jurisdiction,
+        "source_url": row.source_record_url or CO_DATASET_URL,
+        "coverage": {"source": "official_open_data", "officers_published": False},
+        "source_record": row.raw,
     }
 
 

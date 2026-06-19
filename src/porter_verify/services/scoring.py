@@ -108,7 +108,7 @@ def _freshness_component(inp: ScoringInput) -> ComponentScore:
     age = inp.evidence_age_days
     if age is None:
         value, explanation = 0.0, "No evidence timestamp"
-    elif age < FRESH_DAYS:
+    elif age <= FRESH_DAYS:
         value, explanation = 1.0, f"Fresh evidence ({age}d old)"
     elif age <= PARTIAL_DAYS:
         value, explanation = 0.6, f"Partially stale evidence ({age}d old)"
@@ -150,7 +150,7 @@ def derive_overall_status(inp: ScoringInput) -> VerificationStatus:
         return VerificationStatus.NEEDS_REVIEW
 
     # Status is ACTIVE from here.
-    fresh = inp.evidence_age_days is not None and inp.evidence_age_days < FRESH_DAYS
+    fresh = inp.evidence_age_days is not None and inp.evidence_age_days <= FRESH_DAYS
     conf = inp.match_confidence
     if conf >= STRONG_MATCH and fresh:
         return VerificationStatus.VERIFIED

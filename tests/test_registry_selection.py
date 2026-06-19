@@ -5,6 +5,7 @@ Colorado must win for CO (real data); the nationwide mock handles everything els
 
 from __future__ import annotations
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -35,6 +36,21 @@ def test_mock_handles_other_states() -> None:
     chosen = registry.select(state="TX", capability=CAP_STATUS)
     assert chosen is not None
     assert chosen.name == "mock_vendor"
+
+
+@pytest.mark.parametrize(
+    ("state", "source"),
+    [
+        ("CT", "connecticut_sos_opendata"),
+        ("OR", "oregon_sos_opendata"),
+        ("OH", "ohio_sos_bulk"),
+    ],
+)
+def test_other_real_state_connectors_win(state: str, source: str) -> None:
+    registry = build_default_registry(_factory())
+    chosen = registry.select(state=state, capability=CAP_STATUS)
+    assert chosen is not None
+    assert chosen.name == source
 
 
 def test_without_session_factory_only_mock_registered() -> None:

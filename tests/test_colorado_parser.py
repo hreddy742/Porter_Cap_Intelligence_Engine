@@ -91,3 +91,36 @@ def test_parse_record_tolerates_missing_fields() -> None:
     assert rec.formation_date is None
     assert rec.agent_name is None
     assert rec.principal_address is None
+
+
+def test_parse_record_strips_status_clause_appended_to_name() -> None:
+    # The CO bulk export embeds "<status> <date>" into the entityname field for
+    # many inactive entities. legal_name must be the clean name; the status is
+    # already available separately in entitystatus.
+    rec = parse_record(
+        {
+            "entityid": "19871342214",
+            "entityname": "SOUTHWEST CONTRACTING, LLC, Delinquent May 1, 2016",
+            "entitystatus": "Delinquent",
+        }
+    )
+    assert rec.legal_name == "SOUTHWEST CONTRACTING, LLC"
+    assert rec.status_raw == "Delinquent"
+
+
+def test_parse_record_strips_dissolved_clause_preserving_internal_commas() -> None:
+    # Names legitimately contain commas (", INC."); only the trailing status+date
+    # clause may be stripped, never an interior comma.
+    rec = parse_record(
+        {
+            "entityid": "1",
+            "entityname": "MOUNTAIN CHEMICALS CO., INC., Dissolved March 6, 1967",
+            "entitystatus": "Administratively Dissolved",
+        }
+    )
+    assert rec.legal_name == "MOUNTAIN CHEMICALS CO., INC."
+
+
+def test_parse_record_leaves_clean_name_untouched() -> None:
+    rec = parse_record({"entityid": "1", "entityname": "KYLDERON MIST VALLEY LLC"})
+    assert rec.legal_name == "KYLDERON MIST VALLEY LLC"

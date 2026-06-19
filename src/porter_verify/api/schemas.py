@@ -8,7 +8,8 @@ explicit vocabulary, not "sales-ready").
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -55,8 +56,13 @@ class RegistrationOut(BaseModel):
     state: str
     state_entity_id: str
     entity_type: str | None
+    formation_date: date | None
     status_raw: str | None
     status_normalized: RegistrationStatus
+    principal_address: str | None = None  # injected from raw evidence by the route
+    mailing_address: str | None = None
+    jurisdiction: str | None = None
+    source_record_url: str | None = None
 
 
 class RegisteredAgentOut(BaseModel):
@@ -135,14 +141,47 @@ class ReviewResponse(BaseModel):
     decision: ReviewDecision
 
 
+class SourcePolicyUpdate(BaseModel):
+    acquisition_method: Literal["official_api", "open_data", "vendor", "scraper", "manual"]
+    legal_review_status: Literal["pending", "approved", "rejected", "expired"]
+    allowed_purposes: list[str] = Field(max_length=20)
+    retention_days: int | None = Field(default=None, ge=1, le=3650)
+    freshness_sla_hours: int | None = Field(default=None, ge=1, le=8760)
+    terms_url: str | None = Field(default=None, max_length=1000)
+    owner: str | None = Field(default=None, max_length=320)
+
+
+class SourcePolicyOut(SourcePolicyUpdate):
+    model_config = ConfigDict(from_attributes=True)
+
+    approved_by: str | None
+    approved_at: datetime | None
+
+
 class SourceHealthOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     name: str
     capabilities: list[str]
     states: list[str]
+    cost_per_lookup: float
     health_status: str
     enabled: bool
+    policy: SourcePolicyOut | None
+
+
+class SourceQualityOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    source_name: str
+    metric_date: date
+    request_count: int
+    success_count: int
+    record_count: int
+    avg_latency_ms: int | None
+    freshness_pass_rate: float | None
+    estimated_cost: float
+    schema_drift_detected: bool
 
 
 class ErrorResponse(BaseModel):

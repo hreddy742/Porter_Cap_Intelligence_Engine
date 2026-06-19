@@ -8,6 +8,7 @@ provenance/timestamp defaults.
 from __future__ import annotations
 
 import uuid
+from datetime import date
 
 import pytest
 from sqlalchemy.exc import IntegrityError
@@ -18,6 +19,8 @@ from porter_verify.db.models import (
     Company,
     CompanyIdentifier,
     EvidenceItem,
+    SourcePolicy,
+    SourceQualityDaily,
     SourceRegistry,
     VerificationRun,
 )
@@ -116,3 +119,43 @@ def test_evidence_item_links_to_run(db_session: Session) -> None:
 
     assert evidence.captured_at is not None
     assert run.evidence[0].id == evidence.id
+
+
+def test_source_policy_is_one_to_one_and_quality_is_daily(db_session: Session) -> None:
+    source = SourceRegistry(name="state_open_data", capabilities=["entity"], states=["CO"])
+    db_session.add(source)
+    db_session.flush()
+
+    source.policy = SourcePolicy(
+        acquisition_method="open_data",
+        legal_review_status="approved",
+        allowed_purposes=["business_verification"],
+        retention_days=365,
+        freshness_sla_hours=24,
+    )
+    source.quality_daily.append(
+        SourceQualityDaily(
+            metric_date=date(2026, 6, 18),
+            request_count=10,
+            success_count=9,
+            record_count=8,
+            freshness_pass_rate=0.9,
+            estimated_cost=0,
+        )
+    )
+    db_session.commit()
+
+    assert source.policy.allowed_purposes == ["business_verification"]
+    assert source.quality_daily[0].success_count == 9
+
+    db_session.add(
+        SourceQualityDaily(
+            source_id=source.id,
+            metric_date=date(2026, 6, 18),
+            request_count=1,
+            success_count=1,
+            record_count=1,
+        )
+    )
+    with pytest.raises(IntegrityError):
+        db_session.commit()

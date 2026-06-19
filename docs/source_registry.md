@@ -25,8 +25,16 @@ Selection is registry-driven: `registry.select(state="TX", capability="status")`
 | SOS/KYB vendor (Cobalt/Middesk — chosen in Phase 0) | entity, status, agent, officers | Paid API | Core data layer |
 | OFAC / sanctions | SDN + consolidated lists | Free official files | In-flow screening |
 | **Mock vendor** (built-in) | deterministic fixtures | local | dev + tests, proves swappability |
+| Colorado SOS open data | entity, status, agent | Official bulk CSV | Direct connector for CO |
+| Connecticut SOS open data | entity, status | Official SODA API | Direct connector for CT |
+| Oregon SOS open data | entity, status, agent, authorized representatives | Official SODA API | Direct active-entity connector for OR |
+| Ohio SOS export | entity, status, available agent/address fields | Official CSV/ZIP supplied at refresh | Direct connector for OH |
 
 Salesforce (matching/sync), SAM.gov, and UCC vendors come in later phases.
+
+The direct state connectors are the primary source for their four states. A paid
+provider such as Cobalt is not required for these paths, but remains a possible
+fallback for fields and states that official datasets do not cover.
 
 ## How to add a new connector
 

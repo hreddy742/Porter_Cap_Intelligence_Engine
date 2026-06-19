@@ -18,7 +18,7 @@ from porter_verify.connectors.base import (
 from porter_verify.connectors.factory import build_default_registry
 from porter_verify.db.enums import IdentifierType, RegistrationStatus, VerificationStatus
 from porter_verify.db.models import CompanyIdentifier, CompanyOfficer, RegisteredAgent
-from porter_verify.services.companies import upsert_company
+from porter_verify.services.companies import add_registered_agent, add_registration, upsert_company
 from porter_verify.services.evidence import EvidenceStore
 from porter_verify.services.queries import search_companies
 from porter_verify.workers.verify_flow import run_verification
@@ -132,3 +132,52 @@ def test_search_punctuation_query_matches_nothing(db_session: Session) -> None:
 
     assert search_companies(db_session, query="...") == []  # would have matched all
     assert len(search_companies(db_session, query="acme")) == 1  # real query still works
+
+
+# --- Bug 5: stale registered agent left when re-verify has no agent data -----
+
+
+def test_stale_registered_agent_purged_when_reverify_provides_no_agent_data(
+    db_session: Session,
+) -> None:
+    # First verification: source provides an agent → row created.
+    company = upsert_company(
+        db_session,
+        legal_name="Stale Agent Corp",
+        home_state="TX",
+        status=RegistrationStatus.ACTIVE,
+    )
+    registration = add_registration(
+        db_session,
+        company=company,
+        state="TX",
+        state_entity_id="TX-STALE-01",
+        entity_type="LLC",
+        formation_date=None,
+        status_raw="Active",
+        status_normalized=RegistrationStatus.ACTIVE,
+        source_id=None,
+    )
+    agent = add_registered_agent(
+        db_session,
+        registration=registration,
+        agent_name="Jane Roe",
+        agent_address="100 Main St",
+        source_id=None,
+    )
+    db_session.flush()
+    assert agent is not None
+    assert db_session.scalar(select(func.count()).select_from(RegisteredAgent)) == 1
+
+    # Second verification: source returns no agent data (common for inactive entities).
+    # The stale row must be removed — "no data" beats "wrong leftover data".
+    add_registered_agent(
+        db_session,
+        registration=registration,
+        agent_name=None,
+        agent_address=None,
+        source_id=None,
+    )
+    db_session.flush()
+
+    assert db_session.scalar(select(func.count()).select_from(RegisteredAgent)) == 0

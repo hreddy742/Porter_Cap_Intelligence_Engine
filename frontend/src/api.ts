@@ -5,7 +5,8 @@
 
 import { getUser } from "./auth";
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? "http://localhost:8000";
+const API_BASE =
+  import.meta.env.VITE_API_BASE ?? `${window.location.protocol}//${window.location.hostname}:8000`;
 
 export type VerificationStatus =
   | "verified"
@@ -37,6 +38,11 @@ export interface Registration {
   state: string;
   state_entity_id: string;
   entity_type: string | null;
+  formation_date: string | null;
+  principal_address: string | null;
+  mailing_address: string | null;
+  jurisdiction: string | null;
+  source_record_url: string | null;
   status_raw: string | null;
   status_normalized: string;
 }

@@ -28,6 +28,10 @@ class BusinessRegistration(Base, TimestampMixin):
     state_entity_id: Mapped[str] = mapped_column(String(100), nullable=False)
     entity_type: Mapped[str | None] = mapped_column(String(100))
     formation_date: Mapped[date | None] = mapped_column(Date)
+    principal_address: Mapped[str | None] = mapped_column(String(500))
+    mailing_address: Mapped[str | None] = mapped_column(String(500))
+    jurisdiction: Mapped[str | None] = mapped_column(String(100))
+    source_record_url: Mapped[str | None] = mapped_column(String(1000))
     # Raw state jargon kept verbatim alongside the normalized value.
     status_raw: Mapped[str | None] = mapped_column(String(200))
     status_normalized: Mapped[RegistrationStatus] = mapped_column(

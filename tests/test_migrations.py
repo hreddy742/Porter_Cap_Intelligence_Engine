@@ -27,6 +27,12 @@ EXPECTED_TABLES = {
     "evidence_items",
     "review_decisions",
     "audit_logs",
+    "source_policies",
+    "source_quality_daily",
+    "co_business_entities",
+    "ct_business_entities",
+    "or_business_entities",
+    "oh_business_entities",
 }
 
 

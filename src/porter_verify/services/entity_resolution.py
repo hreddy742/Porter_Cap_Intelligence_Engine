@@ -201,7 +201,12 @@ def rank_results(query: EntityQuery, candidates: list[Candidate]) -> Resolution:
 
 
 def resolve(query: EntityQuery, candidates: list[Candidate]) -> Resolution:
-    """Resolve ``query`` against ``candidates`` using conservative thresholds."""
+    """Resolve ``query`` against ``candidates`` using conservative thresholds.
+
+    NOTE: The live verification flow uses ``rank_results()`` (sparse/name-only path).
+    This function is the full weighted-match path (requires reg_id, address, agent)
+    and is available for reg_id-based lookups once that capability is wired up.
+    """
 
     if not candidates:
         return Resolution(outcome=Outcome.NO_MATCH, chosen=None, candidates=[])

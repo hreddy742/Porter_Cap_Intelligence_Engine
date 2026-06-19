@@ -1,0 +1,32 @@
+{
+  "generated_at": "2026-06-18T21:12:00-05:00",
+  "states": {
+    "CO": {
+      "status": "complete",
+      "staged_entities": 3069566,
+      "source_rows_processed": 3069566,
+      "source": "https://data.colorado.gov/Business/Business-Entities-in-Colorado/4ykn-tg5h",
+      "source_file_bytes": 683451722
+    },
+    "CT": {
+      "status": "complete",
+      "staged_entities": 1281606,
+      "source_rows_reported": 1281635,
+      "source": "https://data.ct.gov/d/n7gp-d28j",
+      "note": "Rows without a usable account number or legal name and the 0000000 placeholder are excluded."
+    },
+    "OR": {
+      "status": "complete",
+      "staged_entities": 556188,
+      "source_rows_processed": 1564284,
+      "source": "https://data.oregon.gov/d/tckn-sxa6",
+      "note": "The official dataset is long-format and active-only; multiple rows compose one entity."
+    },
+    "OH": {
+      "status": "source_unavailable",
+      "staged_entities": 0,
+      "source": "https://businesssearch.ohiosos.gov/",
+      "note": "The official search, sitemap, reports, and publication routes returned the Secretary of State maintenance/security page on 2026-06-18. No vendor API credential is configured."
+    }
+  }
+}

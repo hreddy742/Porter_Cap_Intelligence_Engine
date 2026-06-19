@@ -111,6 +111,10 @@ def add_registration(
     status_raw: str | None,
     status_normalized: RegistrationStatus,
     source_id: uuid.UUID | None,
+    principal_address: str | None = None,
+    mailing_address: str | None = None,
+    jurisdiction: str | None = None,
+    source_record_url: str | None = None,
 ) -> BusinessRegistration:
     """Create or update the per-state registration (unique by state+entity id)."""
 
@@ -123,6 +127,10 @@ def add_registration(
     if existing is not None:
         existing.status_raw = status_raw
         existing.status_normalized = status_normalized
+        existing.principal_address = principal_address
+        existing.mailing_address = mailing_address
+        existing.jurisdiction = jurisdiction
+        existing.source_record_url = source_record_url
         session.flush()
         return existing
 
@@ -132,6 +140,10 @@ def add_registration(
         state_entity_id=state_entity_id,
         entity_type=entity_type,
         formation_date=formation_date,
+        principal_address=principal_address,
+        mailing_address=mailing_address,
+        jurisdiction=jurisdiction,
+        source_record_url=source_record_url,
         status_raw=status_raw,
         status_normalized=status_normalized,
         source_id=source_id,
@@ -149,19 +161,21 @@ def add_registered_agent(
     agent_address: str | None,
     source_id: uuid.UUID | None,
 ) -> RegisteredAgent | None:
-    """Set the registration's current registered agent (skipped when no data).
+    """Set the registration's current registered agent (replace-on-re-verify).
 
-    A registration has a single current agent, so we REPLACE: clear any existing
-    agent rows for this registration first. This self-heals duplicates from repeated
-    verifications (re-verify => exactly one agent, not N copies).
+    A registration has a single current agent, so we ALWAYS clear any existing rows
+    first — even when the new source provides no agent data. Leaving a stale row when
+    a re-verify returns None/None would mean old agent data persists indefinitely;
+    "no data" is safer than "wrong leftover data".
     """
 
-    if not agent_name and not agent_address:
-        return None
     for old in session.scalars(
         select(RegisteredAgent).where(RegisteredAgent.registration_id == registration.id)
     ):
         session.delete(old)
+    if not agent_name and not agent_address:
+        session.flush()
+        return None
     agent = RegisteredAgent(
         registration_id=registration.id,
         agent_name=agent_name,

@@ -46,7 +46,13 @@ def create_app(
 
     # CORS: permissive for local dev (React on Vite); locked down elsewhere.
     allow_origins = (
-        ["http://localhost:5173", "http://localhost:3000"]
+        [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+            "http://192.168.1.224:5173",  # LAN access for team review
+        ]
         if settings.env is not Environment.PRODUCTION
         else []
     )

@@ -18,6 +18,7 @@ from porter_verify.db.models import (
     ConfidenceScore,
     EvidenceItem,
     RegisteredAgent,
+    SourceQualityDaily,
     SourceRegistry,
     VerificationRun,
 )
@@ -123,3 +124,17 @@ def evidence_for_company(session: Session, company_id: uuid.UUID) -> list[Eviden
 
 def all_sources(session: Session) -> list[SourceRegistry]:
     return list(session.scalars(select(SourceRegistry).order_by(SourceRegistry.name)))
+
+
+def latest_source_quality(session: Session) -> list[tuple[str, SourceQualityDaily]]:
+    """Return the newest quality measurement available for each source."""
+
+    rows = session.execute(
+        select(SourceRegistry.name, SourceQualityDaily)
+        .join(SourceQualityDaily, SourceQualityDaily.source_id == SourceRegistry.id)
+        .order_by(SourceRegistry.name, SourceQualityDaily.metric_date.desc())
+    )
+    latest: dict[str, SourceQualityDaily] = {}
+    for source_name, quality in rows:
+        latest.setdefault(source_name, quality)
+    return list(latest.items())

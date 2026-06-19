@@ -91,6 +91,27 @@ def test_unknown_company_is_insufficient_evidence(tmp_path: Path, db_session: Se
     assert outcome.company_id is None
 
 
+def test_low_confidence_no_match_does_not_create_company(
+    tmp_path: Path, db_session: Session
+) -> None:
+    # "Acme" is contained in the fixture name, so a candidate is returned and the
+    # fetch succeeds, but name similarity is below the review threshold (NO_MATCH,
+    # score ~0.47). A below-threshold, unverified match must NOT be persisted as a
+    # canonical company — that would fabricate a record the source never confirmed.
+    outcome = run_verification(
+        db_session,
+        registry=build_default_registry(),
+        evidence_store=_store(tmp_path),
+        name="Acme",
+        state="TX",
+    )
+    assert outcome.run_status is RunStatus.COMPLETED
+    assert outcome.verification_status is VerificationStatus.INSUFFICIENT_EVIDENCE
+    assert outcome.company_id is None
+    # No canonical company row written for the weak match.
+    assert list(db_session.scalars(select(Company))) == []
+
+
 def test_partial_name_routes_to_review(tmp_path: Path, db_session: Session) -> None:
     # A partial name match is plausible but not exact -> human review, not VERIFIED.
     outcome = run_verification(
@@ -120,6 +141,23 @@ def test_source_outage_finishes_without_charge(tmp_path: Path, db_session: Sessi
     assert error is not None
     # No raw source event (= no vendor charge) was recorded for the outage.
     assert db_session.scalars(select(RawSourceEvent)).first() is None
+
+
+def test_sanctioned_entity_flagged_even_without_registry_record(
+    tmp_path: Path, db_session: Session
+) -> None:
+    # "Sanctioned Trading Company" is in the OFAC fixture but has no mock-vendor record.
+    # Before the fix: no search hits => INSUFFICIENT_EVIDENCE (OFAC never ran).
+    # After the fix: pre-screen catches the OFAC match before registry lookup => RISK_FLAG.
+    outcome = run_verification(
+        db_session,
+        registry=build_default_registry(),
+        evidence_store=_store(tmp_path),
+        name="Sanctioned Trading Company",
+        state="TX",
+    )
+    assert outcome.verification_status is VerificationStatus.RISK_FLAG
+    assert outcome.company_id is None  # not persisted; sanctioned entities are not clients
 
 
 def test_verification_is_repeatable_without_duplicate_company(
