@@ -37,6 +37,31 @@ class VerifyResponse(BaseModel):
     message: str
 
 
+class RegistryVerifyResponse(BaseModel):
+    verified: bool
+    confidence: float
+    status: str | None
+    entity_type: str | None
+    formation_date: date | None
+    address: str | None
+    officers: list[str]
+    source_url: str | None
+    ofac_clear: bool
+
+
+class OfacMatchOut(BaseModel):
+    match_name: str
+    match_type: Literal["exact", "partial", "alias"]
+    score: float
+    program: str | None = None
+
+
+class OfacResponse(BaseModel):
+    company: str
+    clear: bool
+    match: OfacMatchOut | None
+
+
 class CompanySummary(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -73,11 +98,22 @@ class RecentBusinessFilters(BaseModel):
     states: list[str]
     formed_from: date
     formed_to: date
+    q: str
+    sort_by: Literal["formation_date", "legal_name", "entity_id", "state"]
+    sort_order: Literal["asc", "desc"]
+
+
+class RecentBusinessPagination(BaseModel):
+    page: int
+    page_size: int
+    total: int
+    total_pages: int
 
 
 class RecentBusinessResponse(BaseModel):
     results: list[RecentBusinessOut]
     filters: RecentBusinessFilters
+    pagination: RecentBusinessPagination
 
 
 class RegistrationOut(BaseModel):
@@ -181,6 +217,115 @@ class UccSearchOut(BaseModel):
     completed_by_email: str | None
     created_at: datetime
     completed_at: datetime | None
+
+
+class UccActiveFilingOut(BaseModel):
+    secured_party: str | None
+    filing_date: date | None
+    collateral: str | None
+    lender_type: str
+    is_factoring: bool
+    is_mca: bool
+    status: str | None
+    acquisition_method: str | None = None
+    match_confidence: int | None = None
+
+
+class UccTerminatedFilingOut(BaseModel):
+    secured_party: str | None
+    filing_date: date | None
+    termination_date: date | None
+    lender_type: str
+    days_since_exit: int | None
+    acquisition_method: str | None = None
+    match_confidence: int | None = None
+
+
+class UccLookupResponse(BaseModel):
+    has_active_ucc: bool
+    active_filings: list[UccActiveFilingOut]
+    terminated_filings: list[UccTerminatedFilingOut]
+    ucc_exit_signal: bool
+    days_since_exit: int | None
+    previous_factor: str | None
+    signal_strength: Literal["HOT", "WARM", "NONE"]
+
+
+class UccPublicSearchCreate(BaseModel):
+    company: str = Field(min_length=1, max_length=500)
+    state: str = Field(min_length=2, max_length=2)
+
+
+class UccManualSearchCreate(BaseModel):
+    company: str = Field(min_length=1, max_length=500)
+    state: str = Field(min_length=2, max_length=2, pattern=r"^[A-Za-z]{2}$")
+    notes: str | None = Field(default=None, max_length=4000)
+
+    @field_validator("state")
+    @classmethod
+    def normalize_state(cls, value: str) -> str:
+        return value.upper()
+
+
+class UccPublicSearchResponse(BaseModel):
+    state: str
+    company: str
+    supported: bool
+    imported_count: int
+    message: str
+    lookup: UccLookupResponse
+
+
+class UccCoverageOut(BaseModel):
+    state: str
+    status: Literal[
+        "bulk_loaded",
+        "targeted_public_search",
+        "manual_required",
+        "blocked",
+        "not_started",
+    ]
+    record_count: int
+    last_refresh: datetime | None
+    source_url: str
+    notes: str
+
+
+class UccCoverageResponse(BaseModel):
+    states: list[UccCoverageOut]
+
+
+class UccExitSignalOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    debtor_name: str
+    state: str
+    previous_factor: str | None
+    ucc1_filing_id: str | None
+    ucc3_filing_id: str
+    ucc1_date: date | None
+    ucc3_date: date
+    days_since_exit: int
+    replacement_filed: bool
+    signal_strength: str
+
+
+class KnownFactorCreate(BaseModel):
+    company_name: str = Field(min_length=1, max_length=500)
+    lender_type: Literal["FACTOR", "MCA", "ABL", "BANK"]
+    notes: str | None = Field(default=None, max_length=4000)
+
+
+class KnownFactorOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    company_name: str
+    normalized_name: str
+    lender_type: str
+    notes: str | None
+    added_by: str | None
+    added_at: datetime
 
 
 class ProfileResponse(BaseModel):

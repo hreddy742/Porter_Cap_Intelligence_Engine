@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
-from sqlalchemy import func, not_, or_, select
+from sqlalchemy import asc, desc, func, literal, not_, or_, select, union_all
 from sqlalchemy.orm import Session
 
 from porter_verify.db.models import (
@@ -42,6 +42,12 @@ class RecentBusinessRecord:
     jurisdiction: str | None
     source_record_url: str
     date_basis: str
+
+
+@dataclass(frozen=True)
+class RecentBusinessPage:
+    records: list[RecentBusinessRecord]
+    total: int
 
 
 def _upper(column):  # noqa: ANN001, ANN202
@@ -190,32 +196,70 @@ def find_recent_businesses(
     states: list[str],
     formed_from: date,
     formed_to: date,
-    limit: int,
-) -> list[RecentBusinessRecord]:
-    """Return newest qualifying records across selected state staging tables."""
+    query: str,
+    sort_by: str,
+    sort_order: str,
+    page: int,
+    page_size: int,
+) -> RecentBusinessPage:
+    """Return an accurately counted, globally sorted page across state tables."""
 
-    records: list[RecentBusinessRecord] = []
+    statements = []
     for state in states:
         model = MODELS[state]
         conditions = [
             model.formation_date >= formed_from,
             model.formation_date <= formed_to,
         ]
-        entities = session.scalars(
-            select(model)
-            .where(*conditions)
-            .order_by(model.formation_date.desc(), model.entity_name, model.entity_id)
-            .limit(limit)
+        if query:
+            conditions.append(
+                or_(
+                    _upper(model.entity_name).contains(query.upper(), autoescape=True),
+                    _upper(model.entity_id).contains(query.upper(), autoescape=True),
+                )
+            )
+        statements.append(
+            select(
+                literal(state).label("state"),
+                model.entity_id.label("entity_id"),
+                model.entity_name.label("legal_name"),
+                model.formation_date.label("formation_date"),
+            ).where(*conditions)
         )
-        for entity in entities:
-            records.append(_record(state, entity))
 
-    records.sort(
-        key=lambda item: (
-            item.entity.formation_date or date.min,
-            item.entity.entity_name,
-            item.state,
-        ),
-        reverse=True,
-    )
-    return records[:limit]
+    combined = union_all(*statements).subquery()
+    total = int(session.scalar(select(func.count()).select_from(combined)) or 0)
+    sort_columns = {
+        "formation_date": combined.c.formation_date,
+        "legal_name": func.upper(combined.c.legal_name),
+        "entity_id": func.upper(combined.c.entity_id),
+        "state": combined.c.state,
+    }
+    direction = desc if sort_order == "desc" else asc
+    rows = session.execute(
+        select(combined.c.state, combined.c.entity_id)
+        .order_by(
+            direction(sort_columns[sort_by]),
+            asc(func.upper(combined.c.legal_name)),
+            asc(combined.c.state),
+            asc(combined.c.entity_id),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    ids_by_state: dict[str, list[str]] = {}
+    for state, entity_id in rows:
+        ids_by_state.setdefault(state, []).append(entity_id)
+    entities = {
+        (state, entity.entity_id): entity
+        for state, entity_ids in ids_by_state.items()
+        for entity in session.scalars(
+            select(MODELS[state]).where(MODELS[state].entity_id.in_(entity_ids))
+        )
+    }
+    records = [
+        _record(state, entities[(state, entity_id)])
+        for state, entity_id in rows
+    ]
+    return RecentBusinessPage(records=records, total=total)

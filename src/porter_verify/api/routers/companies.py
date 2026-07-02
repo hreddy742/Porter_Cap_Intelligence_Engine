@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -16,6 +17,7 @@ from porter_verify.api.schemas import (
     ProfileResponse,
     RecentBusinessFilters,
     RecentBusinessOut,
+    RecentBusinessPagination,
     RecentBusinessResponse,
     RegisteredAgentOut,
     RegistrationOut,
@@ -89,7 +91,13 @@ def recent_businesses(
     states: str = Query(default="CO,CT,OR,OH"),
     formed_from: date | None = Query(default=None),
     formed_to: date | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=200),
+    q: str = Query(default="", max_length=200),
+    sort_by: Literal["formation_date", "legal_name", "entity_id", "state"] = Query(
+        default="formation_date"
+    ),
+    sort_order: Literal["asc", "desc"] = Query(default="desc"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_session),
     _user: CurrentUser = Depends(get_current_user),
 ) -> RecentBusinessResponse:
@@ -107,19 +115,33 @@ def recent_businesses(
     start = formed_from or end - timedelta(days=30)
     if start > end:
         raise HTTPException(status_code=422, detail="formed_from must be on or before formed_to.")
-    records = find_recent_businesses(
+    normalized_query = q.strip()
+    result_page = find_recent_businesses(
         session,
         states=selected_states,
         formed_from=start,
         formed_to=end,
-        limit=limit,
+        query=normalized_query,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size,
     )
     return RecentBusinessResponse(
-        results=[_recent_out(item) for item in records],
+        results=[_recent_out(item) for item in result_page.records],
         filters=RecentBusinessFilters(
             states=selected_states,
             formed_from=start,
             formed_to=end,
+            q=normalized_query,
+            sort_by=sort_by,
+            sort_order=sort_order,
+        ),
+        pagination=RecentBusinessPagination(
+            page=page,
+            page_size=page_size,
+            total=result_page.total,
+            total_pages=(result_page.total + page_size - 1) // page_size,
         ),
     )
 

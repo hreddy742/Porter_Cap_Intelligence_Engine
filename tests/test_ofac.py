@@ -7,7 +7,14 @@ from pathlib import Path
 import pytest
 
 from porter_verify.config import get_settings
-from porter_verify.connectors.ofac import load_sdn_names, parse_sdn_csv
+from porter_verify.connectors.ofac import (
+    load_alt_entries,
+    load_sdn_entries,
+    load_sdn_names,
+    parse_alt_entries,
+    parse_sdn_csv,
+    parse_sdn_entries,
+)
 from porter_verify.services import screening
 from porter_verify.services.screening import get_sanctions_list, screen
 
@@ -17,6 +24,7 @@ SAMPLE_SDN = (
     '173,"ANGLO-CARIBBEAN CO., LTD.",-0- ,"CUBA",-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,-0-\n'
     '306,"BANCO NACIONAL DE CUBA","aka BNC ","CUBA",-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,-0- ,-0-\n'
 )
+SAMPLE_ALT = '306,1,"aka","BNC",-0-\n306,2,"aka","Banco Nacional",-0-\n'
 
 
 def test_parse_extracts_names_handling_quoted_commas() -> None:
@@ -25,6 +33,19 @@ def test_parse_extracts_names_handling_quoted_commas() -> None:
         "AEROCARIBBEAN AIRLINES",
         "ANGLO-CARIBBEAN CO., LTD.",  # comma inside quotes preserved
         "BANCO NACIONAL DE CUBA",
+    ]
+
+
+def test_parse_entries_include_programs() -> None:
+    entries = {entry.name: entry.program for entry in parse_sdn_entries(SAMPLE_SDN)}
+    assert entries["BANCO NACIONAL DE CUBA"] == "CUBA"
+
+
+def test_parse_alt_entries_extracts_alias_names() -> None:
+    entries = parse_alt_entries(SAMPLE_ALT)
+    assert [(entry.record_number, entry.name) for entry in entries] == [
+        ("306", "BNC"),
+        ("306", "Banco Nacional"),
     ]
 
 
@@ -37,6 +58,13 @@ def test_load_sdn_names_from_file(tmp_path: Path) -> None:
     f = tmp_path / "sdn.csv"
     f.write_text(SAMPLE_SDN, encoding="utf-8")
     assert "BANCO NACIONAL DE CUBA" in load_sdn_names(f)
+    assert load_sdn_entries(f)[0].program == "CUBA"
+
+
+def test_load_alt_entries_from_file(tmp_path: Path) -> None:
+    f = tmp_path / "alt.csv"
+    f.write_text(SAMPLE_ALT, encoding="utf-8")
+    assert load_alt_entries(f)[0].name == "BNC"
 
 
 def test_screening_hits_against_real_format_list() -> None:

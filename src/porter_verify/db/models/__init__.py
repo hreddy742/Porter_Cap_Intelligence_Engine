@@ -20,12 +20,25 @@ from porter_verify.db.models.source import (
     SourceRegistry,
 )
 from porter_verify.db.models.staging import (
+    AlBusinessEntity,
     CoBusinessEntity,
     CtBusinessEntity,
+    FlBusinessEntity,
+    GaBusinessEntity,
+    MsBusinessEntity,
     OhBusinessEntity,
     OrBusinessEntity,
+    TnBusinessEntity,
+    TxBusinessEntity,
+    VaBusinessEntity,
 )
-from porter_verify.db.models.ucc import UccSearchOrder
+from porter_verify.db.models.ucc import (
+    KnownFactor,
+    UccExitSignal,
+    UccFiling,
+    UccRefreshLog,
+    UccSearchOrder,
+)
 from porter_verify.db.models.user import Role, User
 from porter_verify.db.models.verification import (
     ConfidenceScore,
@@ -37,8 +50,12 @@ from porter_verify.db.models.verification import (
 __all__ = [
     "AuditLog",
     "BusinessRegistration",
+    "AlBusinessEntity",
     "CoBusinessEntity",
     "CtBusinessEntity",
+    "FlBusinessEntity",
+    "GaBusinessEntity",
+    "MsBusinessEntity",
     "OrBusinessEntity",
     "OhBusinessEntity",
     "Company",
@@ -48,6 +65,7 @@ __all__ = [
     "ErrorLog",
     "EvidenceItem",
     "GeneratedReport",
+    "KnownFactor",
     "RawSourceEvent",
     "RegisteredAgent",
     "ReviewDecisionRecord",
@@ -57,7 +75,13 @@ __all__ = [
     "SourcePolicy",
     "SourceQualityDaily",
     "SourceRegistry",
+    "TnBusinessEntity",
+    "TxBusinessEntity",
+    "VaBusinessEntity",
     "User",
+    "UccExitSignal",
+    "UccFiling",
+    "UccRefreshLog",
     "UccSearchOrder",
     "VerificationRun",
 ]

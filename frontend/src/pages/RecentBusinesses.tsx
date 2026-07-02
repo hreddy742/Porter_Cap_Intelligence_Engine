@@ -5,6 +5,7 @@ import {
   ApiError,
   type RecentBusiness,
   type RecentBusinessFilters,
+  type RecentBusinessPagination,
 } from "../api";
 
 const STATES = ["CO", "CT", "OR", "OH"];
@@ -21,22 +22,30 @@ function initialFilters(): RecentBusinessFilters {
     states: [...STATES],
     formed_from: isoDate(start),
     formed_to: isoDate(end),
+    q: "",
+    sort_by: "formation_date",
+    sort_order: "desc",
+    page: 1,
+    page_size: 50,
   };
 }
 
 export function RecentBusinesses() {
   const [filters, setFilters] = useState<RecentBusinessFilters>(initialFilters);
   const [results, setResults] = useState<RecentBusiness[]>([]);
+  const [pagination, setPagination] = useState<RecentBusinessPagination | null>(null);
+  const [appliedFilters, setAppliedFilters] = useState<RecentBusinessFilters | null>(null);
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load() {
+  async function load(requestFilters: RecentBusinessFilters) {
     setLoading(true);
     setError(null);
     try {
-      const response = await api.recentBusinesses(filters);
+      const response = await api.recentBusinesses(requestFilters);
       setResults(response.results);
+      setPagination(response.pagination);
     } catch (err) {
       setError(
         err instanceof ApiError
@@ -67,8 +76,18 @@ export function RecentBusinesses() {
       setError("The start date must be on or before the end date.");
       return;
     }
+    const requestFilters = { ...filters, page: 1 };
+    setFilters(requestFilters);
+    setAppliedFilters(requestFilters);
     setHasSearched(true);
-    void load();
+    void load(requestFilters);
+  }
+
+  function goToPage(page: number) {
+    if (!appliedFilters) return;
+    const requestFilters = { ...appliedFilters, page };
+    setAppliedFilters(requestFilters);
+    void load(requestFilters);
   }
 
   return (
@@ -80,6 +99,17 @@ export function RecentBusinesses() {
           source-defined meaning.
         </p>
         <form onSubmit={submit}>
+          <div>
+            <label htmlFor="business-query">Company name or entity ID</label>
+            <input
+              id="business-query"
+              type="search"
+              maxLength={200}
+              placeholder="Example: Alpha Freight or 20261732113"
+              value={filters.q}
+              onChange={(event) => setFilters({ ...filters, q: event.target.value })}
+            />
+          </div>
           <div className="row">
             <div>
               <label htmlFor="formed-from">Formed from</label>
@@ -106,6 +136,44 @@ export function RecentBusinesses() {
           </div>
 
           <div className="row" style={{ marginTop: "1rem" }}>
+            <div>
+              <label htmlFor="result-sort">Sort results</label>
+              <select
+                id="result-sort"
+                value={`${filters.sort_by}:${filters.sort_order}`}
+                onChange={(event) => {
+                  const [sort_by, sort_order] = event.target.value.split(":") as [
+                    RecentBusinessFilters["sort_by"],
+                    RecentBusinessFilters["sort_order"],
+                  ];
+                  setFilters({ ...filters, sort_by, sort_order });
+                }}
+              >
+                <option value="formation_date:desc">Newest first</option>
+                <option value="formation_date:asc">Oldest first</option>
+                <option value="legal_name:asc">Company name A-Z</option>
+                <option value="legal_name:desc">Company name Z-A</option>
+                <option value="entity_id:asc">Entity ID A-Z</option>
+                <option value="entity_id:desc">Entity ID Z-A</option>
+              </select>
+            </div>
+            <div>
+              <label htmlFor="page-size">Results per page</label>
+              <select
+                id="page-size"
+                value={filters.page_size}
+                onChange={(event) =>
+                  setFilters({ ...filters, page_size: Number(event.target.value) })
+                }
+              >
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="row" style={{ marginTop: "1rem" }}>
             {STATES.map((state) => (
               <label key={state}>
                 <input
@@ -128,7 +196,9 @@ export function RecentBusinesses() {
       </div>
 
       <div className="panel">
-        <h2>Results</h2>
+        <h2>
+          Results{pagination ? ` (${pagination.total.toLocaleString()} matching businesses)` : ""}
+        </h2>
         {!hasSearched ? (
           <p className="empty">Choose filters and press Apply filters to search.</p>
         ) : loading ? (
@@ -142,6 +212,7 @@ export function RecentBusinesses() {
                 <th>Registration / formation</th>
                 <th>Date basis</th>
                 <th>State</th>
+                <th>Entity ID</th>
                 <th>Legal name</th>
                 <th>Entity type</th>
                 <th>Status</th>
@@ -156,6 +227,7 @@ export function RecentBusinesses() {
                   <td>{business.registration_or_formation_date}</td>
                   <td>{business.date_basis}</td>
                   <td>{business.state}</td>
+                  <td>{business.entity_id}</td>
                   <td>{business.legal_name}</td>
                   <td>{business.entity_type ?? "—"}</td>
                   <td>{business.status_raw ?? "—"}</td>
@@ -170,6 +242,27 @@ export function RecentBusinesses() {
               ))}
             </tbody>
           </table>
+        )}
+        {hasSearched && !loading && pagination && pagination.total_pages > 0 && (
+          <div className="row" style={{ marginTop: "1rem", alignItems: "center" }}>
+            <button
+              type="button"
+              disabled={pagination.page <= 1}
+              onClick={() => goToPage(pagination.page - 1)}
+            >
+              Previous
+            </button>
+            <span>
+              Page {pagination.page} of {pagination.total_pages}
+            </span>
+            <button
+              type="button"
+              disabled={pagination.page >= pagination.total_pages}
+              onClick={() => goToPage(pagination.page + 1)}
+            >
+              Next
+            </button>
+          </div>
         )}
       </div>
     </>

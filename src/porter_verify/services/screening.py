@@ -16,7 +16,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from porter_verify.config import get_settings
-from porter_verify.connectors.ofac import load_sdn_names
+from porter_verify.connectors.ofac import load_alt_entries, load_sdn_names
 from porter_verify.logging_config import get_logger
 from porter_verify.services.entity_resolution import name_sim
 from porter_verify.services.normalization import normalize_name
@@ -47,11 +47,20 @@ def get_sanctions_list() -> list[str]:
     path = Path(get_settings().ofac_sdn_path)
     if path.exists():
         names = load_sdn_names(path)
+        alt_path = Path(get_settings().ofac_alt_path)
+        if alt_path.exists():
+            names.extend(entry.name for entry in load_alt_entries(alt_path))
         if names:
             log.info("ofac_list_loaded", source=str(path), count=len(names))
             return names
     log.info("ofac_list_fixture", count=len(_FIXTURE_LIST))
     return _FIXTURE_LIST
+
+
+def clear_screening_caches() -> None:
+    """Clear process-local OFAC screening caches after refreshing source files."""
+
+    get_sanctions_list.cache_clear()
 
 
 @dataclass(frozen=True)

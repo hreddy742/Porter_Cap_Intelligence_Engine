@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 from porter_verify.config import get_settings
 from porter_verify.db import models  # noqa: F401  (registers all tables on metadata)
 from porter_verify.db.base import Base
+from porter_verify.services.ofac import get_ofac_metadata_by_name
 from porter_verify.services.screening import get_sanctions_list
 
 
@@ -30,11 +31,15 @@ def isolate_ofac_list(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     """
 
     monkeypatch.setenv("PORTER_OFAC_SDN_PATH", "__no_such_ofac_file__.csv")
+    monkeypatch.setenv("PORTER_OFAC_ALT_PATH", "__no_such_ofac_alt_file__.csv")
+    monkeypatch.setenv("PORTER_SCHEDULER_ENABLED", "false")
     get_settings.cache_clear()
     get_sanctions_list.cache_clear()
+    get_ofac_metadata_by_name.cache_clear()
     yield
     get_settings.cache_clear()
     get_sanctions_list.cache_clear()
+    get_ofac_metadata_by_name.cache_clear()
 
 
 @pytest.fixture

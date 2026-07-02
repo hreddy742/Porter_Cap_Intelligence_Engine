@@ -30,9 +30,20 @@ EXPECTED_TABLES = {
     "source_policies",
     "source_quality_daily",
     "co_business_entities",
+    "al_business_entities",
     "ct_business_entities",
+    "fl_business_entities",
+    "ga_business_entities",
+    "ms_business_entities",
     "or_business_entities",
+    "tn_business_entities",
+    "tx_business_entities",
+    "va_business_entities",
     "oh_business_entities",
+    "ucc_filings",
+    "known_factors",
+    "ucc_exit_signals",
+    "ucc_refresh_log",
 }
 
 

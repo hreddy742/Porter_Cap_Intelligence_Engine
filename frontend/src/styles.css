@@ -83,6 +83,8 @@ th { color: var(--muted); font-weight: 600; }
 .bar > span { display: block; height: 100%; background: var(--brand-2); }
 
 .error { background: #fdecec; color: #b32d2d; border: 1px solid #f3c6c6; padding: 0.6rem 0.8rem; border-radius: 6px; }
+.notice { background: #f0f7fc; border: 1px solid #c9e2f5; border-radius: 6px; padding: 0.7rem 0.85rem; margin-top: 0.8rem; }
+.notice p { margin: 0.25rem 0; }
 .empty { color: var(--muted); font-style: italic; padding: 0.5rem 0; }
 .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0.8rem; }
 .kpi { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 0.9rem; }

@@ -218,9 +218,7 @@ export function CompanyProfile() {
         />
       )}
 
-      {canReview && latest_run && (
-        <ReviewPanel runId={latest_run.id} onDone={load} />
-      )}
+      {canReview && latest_run && <ReviewPanel runId={latest_run.id} />}
     </>
   );
 }
@@ -362,7 +360,7 @@ function UccCompletionForm({ searchId, onDone }: { searchId: string; onDone: () 
   );
 }
 
-function ReviewPanel({ runId, onDone }: { runId: string; onDone: () => void }) {
+function ReviewPanel({ runId }: { runId: string }) {
   const [decision, setDecision] = useState("approved");
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
@@ -376,7 +374,6 @@ function ReviewPanel({ runId, onDone }: { runId: string; onDone: () => void }) {
     try {
       await api.review(runId, decision, reason.trim());
       setDone(true);
-      onDone();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to record decision.");
     } finally {

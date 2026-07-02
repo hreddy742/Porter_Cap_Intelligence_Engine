@@ -8,15 +8,28 @@ from sqlalchemy.orm import Session
 
 from porter_verify import __version__
 from porter_verify.api.deps import get_session
+from porter_verify.services.state_registries import registry_counts
+from porter_verify.services.ucc_intelligence import ucc_counts
 
 router = APIRouter(tags=["health"])
 
 
 @router.get("/health")
-def health() -> dict[str, str]:
-    """Liveness: the process is up."""
+def health(session: Session = Depends(get_session)) -> dict:
+    """Liveness plus registry table counts."""
 
-    return {"status": "ok", "version": __version__}
+    counts = registry_counts(session)
+    body = {
+        "status": "ok",
+        "version": __version__,
+        "record_counts": counts.record_counts,
+        "last_refresh_timestamps": {
+            state: value.isoformat() if value else None
+            for state, value in counts.last_refresh_timestamps.items()
+        },
+    }
+    body.update(ucc_counts(session))
+    return body
 
 
 @router.get("/ready")

@@ -3,7 +3,7 @@
 // One small fetch wrapper attaches the auth headers and surfaces clean errors.
 // Types mirror the backend Pydantic schemas (kept deliberately in sync).
 
-import { getUser } from "./auth";
+import { getUser, type CurrentUser } from "./auth";
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? "/api";
 
@@ -22,6 +22,31 @@ export interface VerifyResponse {
   company_id: string | null;
   match_confidence: number | null;
   message: string;
+}
+
+export interface RegistryVerifyResponse {
+  verified: boolean;
+  confidence: number;
+  status: string | null;
+  entity_type: string | null;
+  formation_date: string | null;
+  address: string | null;
+  officers: string[];
+  source_url: string | null;
+  ofac_clear: boolean;
+}
+
+export interface OfacMatch {
+  match_name: string;
+  match_type: "exact" | "partial" | "alias";
+  score: number;
+  program: string | null;
+}
+
+export interface OfacResponse {
+  company: string;
+  clear: boolean;
+  match: OfacMatch | null;
 }
 
 export interface CompanySummary {
@@ -54,6 +79,18 @@ export interface RecentBusinessFilters {
   states: string[];
   formed_from: string;
   formed_to: string;
+  q: string;
+  sort_by: "formation_date" | "legal_name" | "entity_id" | "state";
+  sort_order: "asc" | "desc";
+  page: number;
+  page_size: number;
+}
+
+export interface RecentBusinessPagination {
+  page: number;
+  page_size: number;
+  total: number;
+  total_pages: number;
 }
 
 export interface Registration {
@@ -129,6 +166,71 @@ export interface UccSearch {
   completed_at: string | null;
 }
 
+export interface UccActiveFiling {
+  secured_party: string | null;
+  filing_date: string | null;
+  collateral: string | null;
+  lender_type: string;
+  is_factoring: boolean;
+  is_mca: boolean;
+  status: string | null;
+  acquisition_method: string | null;
+  match_confidence: number | null;
+}
+
+export interface UccTerminatedFiling {
+  secured_party: string | null;
+  filing_date: string | null;
+  termination_date: string | null;
+  lender_type: string;
+  days_since_exit: number | null;
+  acquisition_method: string | null;
+  match_confidence: number | null;
+}
+
+export interface UccLookupResponse {
+  has_active_ucc: boolean;
+  active_filings: UccActiveFiling[];
+  terminated_filings: UccTerminatedFiling[];
+  ucc_exit_signal: boolean;
+  days_since_exit: number | null;
+  previous_factor: string | null;
+  signal_strength: "HOT" | "WARM" | "NONE";
+}
+
+export interface UccPublicSearchResponse {
+  state: string;
+  company: string;
+  supported: boolean;
+  imported_count: number;
+  message: string;
+  lookup: UccLookupResponse;
+}
+
+export interface UccCoverageState {
+  state: string;
+  status:
+    | "bulk_loaded"
+    | "targeted_public_search"
+    | "manual_required"
+    | "blocked"
+    | "not_started";
+  record_count: number;
+  last_refresh: string | null;
+  source_url: string;
+  notes: string;
+}
+
+export interface UccManualSearchRequest {
+  company: string;
+  state: string;
+  notes: string | null;
+}
+
+export interface UccCoverageResponse {
+  states: UccCoverageState[];
+}
+
 export interface Profile {
   company: CompanySummary;
   registrations: Registration[];
@@ -151,12 +253,12 @@ export class ApiError extends Error {
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const user = getUser();
+  const authHeader = user?.apiKey ? { Authorization: `Bearer ${user.apiKey}` } : {};
   const requestInit = {
     ...init,
     headers: {
       "Content-Type": "application/json",
-      "X-User-Email": user.email,
-      "X-User-Role": user.role,
+      ...authHeader,
       ...(init.headers ?? {}),
     },
   };
@@ -190,18 +292,53 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ name, state: state || null }),
     }),
+  registryVerify: (company: string, state: string) => {
+    const params = new URLSearchParams({ company, state });
+    return request<RegistryVerifyResponse>(`/verify?${params.toString()}`);
+  },
+  ofac: (company: string) => {
+    const params = new URLSearchParams({ company });
+    return request<OfacResponse>(`/ofac?${params.toString()}`);
+  },
   search: (q: string, state: string | null) => {
     const params = new URLSearchParams({ q });
     if (state) params.set("state", state);
     return request<{ results: CompanySummary[] }>(`/companies?${params.toString()}`);
   },
+  uccLookup: (company: string, state: string | null) => {
+    const params = new URLSearchParams({ company });
+    if (state) params.set("state", state);
+    return request<UccLookupResponse>(`/ucc?${params.toString()}`);
+  },
+  uccPublicSearch: (company: string, state: string) =>
+    request<UccPublicSearchResponse>("/ucc/public-search", {
+      method: "POST",
+      body: JSON.stringify({ company, state }),
+    }),
+  uccCoverage: () => request<UccCoverageResponse>("/ucc/coverage"),
+  createManualUccSearch: (payload: UccManualSearchRequest) =>
+    request<UccSearch>("/ucc/manual-searches", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  manualUccSearches: (status: "pending" | "completed" = "pending") =>
+    request<UccSearch[]>(`/ucc/manual-searches?status=${status}`),
   recentBusinesses: (filters: RecentBusinessFilters) => {
     const params = new URLSearchParams({
       states: filters.states.join(","),
       formed_from: filters.formed_from,
       formed_to: filters.formed_to,
+      q: filters.q,
+      sort_by: filters.sort_by,
+      sort_order: filters.sort_order,
+      page: String(filters.page),
+      page_size: String(filters.page_size),
     });
-    return request<{ results: RecentBusiness[]; filters: RecentBusinessFilters }>(
+    return request<{
+      results: RecentBusiness[];
+      filters: Omit<RecentBusinessFilters, "page" | "page_size">;
+      pagination: RecentBusinessPagination;
+    }>(
       `/recent-businesses?${params.toString()}`,
     );
   },
@@ -211,6 +348,7 @@ export const api = {
     ),
   getRun: (runId: string) =>
     request<{ run: Run; scores: ScoreComponent[]; evidence: Evidence[] }>(`/runs/${runId}`),
+  me: () => request<CurrentUser>("/auth/me"),
   profile: (companyId: string) => request<Profile>(`/companies/${companyId}/profile`),
   review: (runId: string, decision: string, reason: string) =>
     request<{ id: string; run_id: string; decision: string }>(`/review/${runId}/decision`, {

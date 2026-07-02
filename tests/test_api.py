@@ -13,11 +13,19 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from porter_verify.api.app import create_app
+from porter_verify.config import get_settings
 from porter_verify.connectors.factory import build_default_registry
 from porter_verify.db import models  # noqa: F401  (register tables)
 from porter_verify.db.base import Base
-from porter_verify.db.models import CoBusinessEntity, CtBusinessEntity, OrBusinessEntity
+from porter_verify.db.models import (
+    AlBusinessEntity,
+    CoBusinessEntity,
+    CtBusinessEntity,
+    OrBusinessEntity,
+)
 from porter_verify.services.evidence import EvidenceStore
+from porter_verify.services.ofac import get_ofac_metadata_by_name
+from porter_verify.services.screening import get_sanctions_list
 
 
 def _headers(role: str, email: str | None = None) -> dict[str, str]:
@@ -66,7 +74,10 @@ def client(tmp_path: Path) -> Iterator[TestClient]:
 def test_health_is_public(client: TestClient) -> None:
     resp = client.get("/health")
     assert resp.status_code == 200
-    assert resp.json()["status"] == "ok"
+    body = resp.json()
+    assert body["status"] == "ok"
+    assert "AL" in body["record_counts"]
+    assert "AL" in body["last_refresh_timestamps"]
 
 
 def test_local_127_origin_passes_cors_preflight(client: TestClient) -> None:
@@ -100,6 +111,11 @@ def test_verify_rejects_unknown_role(client: TestClient) -> None:
     assert resp.status_code == 401
 
 
+def test_ofac_requires_auth(client: TestClient) -> None:
+    resp = client.get("/ofac", params={"company": "Acme Logistics LLC"})
+    assert resp.status_code == 401
+
+
 def test_compliance_cannot_verify(client: TestClient) -> None:
     resp = client.post(
         "/verify",
@@ -130,6 +146,132 @@ def test_verify_then_search_and_profile(client: TestClient) -> None:
 def test_verify_validation_error(client: TestClient) -> None:
     resp = client.post("/verify", json={"name": ""}, headers=_headers("sales"))
     assert resp.status_code == 422
+
+
+def test_get_verify_searches_alabama_registry_and_ofac(client: TestClient) -> None:
+    with client.app.state.session_factory() as session:
+        session.add(
+            AlBusinessEntity(
+                entity_id="000123456",
+                entity_name="Bama Freight LLC",
+                normalized_name="bama freight llc",
+                status_raw="Exists",
+                entity_type="Domestic Limited Liability Company",
+                formation_date=date(2026, 6, 1),
+                principal_address="100 Commerce St",
+                mailing_address=None,
+                jurisdiction="AL",
+                source_record_url="https://arc-sos.state.al.us/cgi/corpdetail.mbr/detail?corp=000123456",
+                agent_name="Jane Agent",
+                agent_address=None,
+                officers=[],
+                raw={},
+            )
+        )
+        session.commit()
+
+    resp = client.get(
+        "/verify",
+        params={"company": "Bama Freight LLC", "state": "AL"},
+        headers=_headers("sales"),
+    )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["verified"] is True
+    assert body["confidence"] == 1.0
+    assert body["status"] == "Exists"
+    assert body["entity_type"] == "Domestic Limited Liability Company"
+    assert body["formation_date"] == "2026-06-01"
+    assert body["address"] == "100 Commerce St"
+    assert body["ofac_clear"] is True
+
+
+def test_get_verify_returns_not_verified_for_missing_registry_match(client: TestClient) -> None:
+    resp = client.get(
+        "/verify",
+        params={"company": "Missing Company LLC", "state": "AL"},
+        headers=_headers("sales"),
+    )
+
+    assert resp.status_code == 200
+    assert resp.json()["verified"] is False
+
+
+def test_ofac_endpoint_returns_clear_for_non_hit(client: TestClient) -> None:
+    resp = client.get(
+        "/ofac",
+        params={"company": "Acme Logistics LLC"},
+        headers=_headers("compliance"),
+    )
+
+    assert resp.status_code == 200
+    assert resp.json() == {"company": "Acme Logistics LLC", "clear": True, "match": None}
+
+
+def test_ofac_endpoint_returns_match_with_program(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sdn = tmp_path / "sdn.csv"
+    sdn.write_text(
+        '306,"BANCO NACIONAL DE CUBA","aka BNC ","CUBA",-0- ,-0- ,-0- ,-0-\n',
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PORTER_OFAC_SDN_PATH", str(sdn))
+    get_settings.cache_clear()
+    get_sanctions_list.cache_clear()
+    get_ofac_metadata_by_name.cache_clear()
+    try:
+        resp = client.get(
+            "/ofac",
+            params={"company": "Banco Nacional de Cuba"},
+            headers=_headers("sales"),
+        )
+    finally:
+        get_settings.cache_clear()
+        get_sanctions_list.cache_clear()
+        get_ofac_metadata_by_name.cache_clear()
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["clear"] is False
+    assert body["match"]["match_name"] == "BANCO NACIONAL DE CUBA"
+    assert body["match"]["match_type"] == "exact"
+    assert body["match"]["program"] == "CUBA"
+
+
+def test_ofac_endpoint_returns_alias_match_with_program(
+    client: TestClient, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    sdn = tmp_path / "sdn.csv"
+    alt = tmp_path / "alt.csv"
+    sdn.write_text(
+        '306,"BANCO NACIONAL DE CUBA","aka BNC ","CUBA",-0- ,-0- ,-0- ,-0-\n',
+        encoding="utf-8",
+    )
+    alt.write_text('306,1,"aka","BNC",-0-\n', encoding="utf-8")
+    monkeypatch.setenv("PORTER_OFAC_SDN_PATH", str(sdn))
+    monkeypatch.setenv("PORTER_OFAC_ALT_PATH", str(alt))
+    get_settings.cache_clear()
+    get_sanctions_list.cache_clear()
+    get_ofac_metadata_by_name.cache_clear()
+    try:
+        resp = client.get(
+            "/ofac",
+            params={"company": "BNC"},
+            headers=_headers("sales"),
+        )
+    finally:
+        get_settings.cache_clear()
+        get_sanctions_list.cache_clear()
+        get_ofac_metadata_by_name.cache_clear()
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["clear"] is False
+    assert body["match"]["match_name"] == "BNC"
+    assert body["match"]["match_type"] == "alias"
+    assert body["match"]["program"] == "CUBA"
 
 
 # --- recent business feed -------------------------------------------------
@@ -206,6 +348,12 @@ def test_recent_businesses_filter_only_by_state_and_date(
     }
     eligible = next(item for item in body["results"] if item["entity_id"] == "CO-RECENT-1")
     assert eligible["source_record_url"].endswith("?entityid=CO-RECENT-1")
+    assert body["pagination"] == {
+        "page": 1,
+        "page_size": 50,
+        "total": 4,
+        "total_pages": 1,
+    }
 
     detail = client.get(
         "/recent-businesses/CO/CO-RECENT-1",
@@ -213,6 +361,93 @@ def test_recent_businesses_filter_only_by_state_and_date(
     )
     assert detail.status_code == 200
     assert detail.json()["legal_name"] == "Front Range Trucking LLC"
+
+
+def test_recent_businesses_search_pagination_and_sorting(client: TestClient) -> None:
+    today = date.today()
+    rows = [
+        CoBusinessEntity(
+            entity_id="CO-SEARCH-100",
+            entity_name="Alpha Freight LLC",
+            normalized_name="alpha freight",
+            status_raw="Good Standing",
+            entity_type="DLLC",
+            formation_date=today - timedelta(days=1),
+            jurisdiction="CO",
+            officers=[],
+            raw={},
+        ),
+        CoBusinessEntity(
+            entity_id="CO-SEARCH-200",
+            entity_name="Beta Freight LLC",
+            normalized_name="beta freight",
+            status_raw="Good Standing",
+            entity_type="DLLC",
+            formation_date=today - timedelta(days=2),
+            jurisdiction="CO",
+            officers=[],
+            raw={},
+        ),
+        CtBusinessEntity(
+            entity_id="CT-SEARCH-300",
+            entity_name="Gamma Freight LLC",
+            normalized_name="gamma freight",
+            status_raw="Active",
+            entity_type="LLC",
+            formation_date=today - timedelta(days=3),
+            jurisdiction="CT",
+            officers=[],
+            raw={"citizenship": "Domestic"},
+        ),
+    ]
+    with client.app.state.session_factory() as session:
+        session.add_all(rows)
+        session.commit()
+
+    common = {
+        "states": "CO,CT",
+        "formed_from": (today - timedelta(days=7)).isoformat(),
+        "formed_to": today.isoformat(),
+        "q": "freight",
+        "sort_by": "legal_name",
+        "sort_order": "asc",
+        "page_size": 2,
+    }
+    first = client.get(
+        "/recent-businesses",
+        params={**common, "page": 1},
+        headers=_headers("sales"),
+    )
+    second = client.get(
+        "/recent-businesses",
+        params={**common, "page": 2},
+        headers=_headers("sales"),
+    )
+
+    assert first.status_code == 200
+    assert [item["legal_name"] for item in first.json()["results"]] == [
+        "Alpha Freight LLC",
+        "Beta Freight LLC",
+    ]
+    assert first.json()["pagination"] == {
+        "page": 1,
+        "page_size": 2,
+        "total": 3,
+        "total_pages": 2,
+    }
+    assert [item["legal_name"] for item in second.json()["results"]] == [
+        "Gamma Freight LLC"
+    ]
+
+    by_id = client.get(
+        "/recent-businesses",
+        params={**common, "q": "SEARCH-300"},
+        headers=_headers("sales"),
+    )
+    assert [item["entity_id"] for item in by_id.json()["results"]] == [
+        "CT-SEARCH-300"
+    ]
+    assert by_id.json()["filters"]["q"] == "SEARCH-300"
 
 def test_recent_connecticut_signals_use_official_citizenship(
     client: TestClient,

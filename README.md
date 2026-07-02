@@ -80,6 +80,42 @@ Colorado, Connecticut, Oregon, and Ohio have direct state connectors. See
 [`docs/four_state_review.md`](docs/four_state_review.md) for coverage, refresh
 commands, source limitations, and the review checklist.
 
+### UCC filing intelligence
+
+Porter Verify also exposes deterministic UCC intelligence for Porter Leads over
+REST only; there is no shared database or shared code between the systems.
+
+Endpoints:
+
+- `GET /ucc?company={name}&state={ST}` returns active/terminated UCC filings and
+  any UCC-3 exit signal for the debtor name.
+- `GET /ucc/exits` returns freshest UCC exit signals first, optionally filtered by
+  state or `min_strength=HOT|WARM`.
+- `GET /ucc/known-factors` lists the deterministic factor/MCA/ABL/bank watchlist.
+- `POST /ucc/known-factors` lets ops/compliance add competitor factor names from
+  John Cox Miller.
+
+Classification is rule-based only. Known factors are checked first, then MCA,
+bank, and equipment indicators. AI is not used for scoring, gates, suppression,
+or lender classification.
+
+Washington UCC ingestion currently supports an official CSV/JSON file or URL:
+
+```bash
+python scripts/refresh_washington_ucc.py --file path/to/washington_ucc.csv
+python scripts/refresh_washington_ucc.py --url https://official-source.example/file.csv
+```
+
+Important source note: historical IACA materials say Washington offered a free
+full database/API, but the current official pages found during implementation
+expose UCC search/filing pages, not a verified direct public bulk URL. Do not
+claim Washington is live-loaded until an official working bulk URL or file is
+provided and logged in `ucc_refresh_log`.
+
+Known paid/gated UCC feeds include Kentucky, North Dakota, Minnesota, Idaho,
+Kansas, Texas, Florida's vendor registry, and Indiana. Use official subscription
+or bulk channels for those states. Do not scrape North Carolina SOS UI.
+
 ## Running tests
 
 ```bash

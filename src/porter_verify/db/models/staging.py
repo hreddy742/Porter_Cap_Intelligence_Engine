@@ -83,6 +83,153 @@ class CoBusinessEntity(Base, TimestampMixin):
     raw: Mapped[dict] = mapped_column(JSON, nullable=False)
 
 
+class AlBusinessEntity(Base, TimestampMixin):
+    """One ingested Alabama business-entity record (keyed by entity id)."""
+
+    __tablename__ = "al_business_entities"
+
+    entity_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    status_raw: Mapped[str | None] = mapped_column(String(200))
+    entity_type: Mapped[str | None] = mapped_column(String(100))
+    formation_date: Mapped[date | None] = mapped_column(Date, index=True)
+    principal_address: Mapped[str | None] = mapped_column(Text)
+    mailing_address: Mapped[str | None] = mapped_column(Text)
+    jurisdiction: Mapped[str | None] = mapped_column(String(100))
+    source_record_url: Mapped[str | None] = mapped_column(String(1000))
+    agent_name: Mapped[str | None] = mapped_column(String(300))
+    agent_address: Mapped[str | None] = mapped_column(Text)
+    officers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    raw: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class GaBusinessEntity(Base, TimestampMixin):
+    """One ingested Georgia business-entity record (keyed by control number)."""
+
+    __tablename__ = "ga_business_entities"
+
+    entity_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    status_raw: Mapped[str | None] = mapped_column(String(200))
+    entity_type: Mapped[str | None] = mapped_column(String(100))
+    formation_date: Mapped[date | None] = mapped_column(Date, index=True)
+    principal_address: Mapped[str | None] = mapped_column(Text)
+    mailing_address: Mapped[str | None] = mapped_column(Text)
+    jurisdiction: Mapped[str | None] = mapped_column(String(100))
+    source_record_url: Mapped[str | None] = mapped_column(String(1000))
+    agent_name: Mapped[str | None] = mapped_column(String(300))
+    agent_address: Mapped[str | None] = mapped_column(Text)
+    officers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    raw: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class FlBusinessEntity(Base, TimestampMixin):
+    """One ingested Florida Sunbiz business-entity record (keyed by document number)."""
+
+    __tablename__ = "fl_business_entities"
+
+    entity_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    status_raw: Mapped[str | None] = mapped_column(String(200))
+    entity_type: Mapped[str | None] = mapped_column(String(100))
+    formation_date: Mapped[date | None] = mapped_column(Date, index=True)
+    principal_address: Mapped[str | None] = mapped_column(Text)
+    mailing_address: Mapped[str | None] = mapped_column(Text)
+    jurisdiction: Mapped[str | None] = mapped_column(String(100))
+    source_record_url: Mapped[str | None] = mapped_column(String(1000))
+    agent_name: Mapped[str | None] = mapped_column(String(300))
+    agent_address: Mapped[str | None] = mapped_column(Text)
+    officers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    raw: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class TnBusinessEntity(Base, TimestampMixin):
+    """One ingested Tennessee business-entity record (keyed by control number)."""
+
+    __tablename__ = "tn_business_entities"
+
+    entity_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    status_raw: Mapped[str | None] = mapped_column(String(200))
+    entity_type: Mapped[str | None] = mapped_column(String(100))
+    formation_date: Mapped[date | None] = mapped_column(Date, index=True)
+    principal_address: Mapped[str | None] = mapped_column(Text)
+    mailing_address: Mapped[str | None] = mapped_column(Text)
+    jurisdiction: Mapped[str | None] = mapped_column(String(100))
+    source_record_url: Mapped[str | None] = mapped_column(String(1000))
+    agent_name: Mapped[str | None] = mapped_column(String(300))
+    agent_address: Mapped[str | None] = mapped_column(Text)
+    officers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    raw: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class TxBusinessEntity(Base, TimestampMixin):
+    """One ingested Texas business-entity record (keyed by file number)."""
+
+    __tablename__ = "tx_business_entities"
+
+    entity_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    status_raw: Mapped[str | None] = mapped_column(String(200))
+    entity_type: Mapped[str | None] = mapped_column(String(100))
+    formation_date: Mapped[date | None] = mapped_column(Date, index=True)
+    principal_address: Mapped[str | None] = mapped_column(Text)
+    mailing_address: Mapped[str | None] = mapped_column(Text)
+    jurisdiction: Mapped[str | None] = mapped_column(String(100))
+    source_record_url: Mapped[str | None] = mapped_column(String(1000))
+    agent_name: Mapped[str | None] = mapped_column(String(300))
+    agent_address: Mapped[str | None] = mapped_column(Text)
+    officers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    raw: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class VaBusinessEntity(Base, TimestampMixin):
+    """One ingested Virginia SCC business-entity record (keyed by entity id)."""
+
+    __tablename__ = "va_business_entities"
+
+    entity_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    status_raw: Mapped[str | None] = mapped_column(String(200))
+    entity_type: Mapped[str | None] = mapped_column(String(100))
+    formation_date: Mapped[date | None] = mapped_column(Date, index=True)
+    principal_address: Mapped[str | None] = mapped_column(Text)
+    mailing_address: Mapped[str | None] = mapped_column(Text)
+    jurisdiction: Mapped[str | None] = mapped_column(String(100))
+    source_record_url: Mapped[str | None] = mapped_column(String(1000))
+    agent_name: Mapped[str | None] = mapped_column(String(300))
+    agent_address: Mapped[str | None] = mapped_column(Text)
+    officers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    raw: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
+class MsBusinessEntity(Base, TimestampMixin):
+    """One ingested Mississippi business-entity record (keyed by business id)."""
+
+    __tablename__ = "ms_business_entities"
+
+    entity_id: Mapped[str] = mapped_column(String(50), primary_key=True)
+    entity_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    normalized_name: Mapped[str] = mapped_column(String(500), nullable=False, index=True)
+    status_raw: Mapped[str | None] = mapped_column(String(200))
+    entity_type: Mapped[str | None] = mapped_column(String(100))
+    formation_date: Mapped[date | None] = mapped_column(Date, index=True)
+    principal_address: Mapped[str | None] = mapped_column(Text)
+    mailing_address: Mapped[str | None] = mapped_column(Text)
+    jurisdiction: Mapped[str | None] = mapped_column(String(100))
+    source_record_url: Mapped[str | None] = mapped_column(String(1000))
+    agent_name: Mapped[str | None] = mapped_column(String(300))
+    agent_address: Mapped[str | None] = mapped_column(Text)
+    officers: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    raw: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+
 class OhBusinessEntity(Base, TimestampMixin):
     """One ingested Ohio business-entity record (keyed by charter number)."""
 

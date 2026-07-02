@@ -44,6 +44,7 @@ class Settings(BaseSettings):
     env: Environment = Environment.LOCAL
     log_level: str = "INFO"
     log_console: bool = True
+    scheduler_enabled: bool = True
 
     # --- database ---------------------------------------------------------
     # Default points at the docker-compose Postgres. Tests override this with
@@ -57,6 +58,19 @@ class Settings(BaseSettings):
     # Local copy of the official OFAC SDN CSV (populated by scripts/refresh_ofac.py).
     # When absent, screening falls back to a small bundled fixture.
     ofac_sdn_path: str = "./data/ofac_sdn.csv"
+    ofac_alt_path: str = "./data/ofac_alt.csv"
+    fl_ucc_zip_dir: str = "./data/florida_ucc"
+
+    # --- API authentication -----------------------------------------------
+    # Comma-separated triples: email:role:key
+    # Example: alice@portercap.net:sales:sk-v1-s-abc123,bob@portercap.net:admin:sk-v1-a-xyz789
+    # Blank in local/test — all routes are protected; populate in .env for real dev use.
+    api_keys: str = Field(default="", repr=False)
+
+    # --- CORS for production -----------------------------------------------
+    # Comma-separated allowed origins for the browser frontend in staging/prod.
+    # Example: https://verify.portercap.net,https://verify-staging.portercap.net
+    allowed_origins: str = ""
 
     # --- vendor / integration credential references -----------------------
     # Blank locally => the mock connector is used. Real values are secret-manager
