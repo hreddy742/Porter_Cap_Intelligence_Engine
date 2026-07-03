@@ -56,6 +56,16 @@ class VerificationRun(Base):
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # Client-supplied Idempotency-Key (POST /verify header). A repeated request
+    # with the same key returns the original run instead of starting a new one
+    # and re-charging the source -- see api/routers/verify.py.
+    idempotency_key: Mapped[str | None] = mapped_column(String(255), unique=True, index=True)
+    # The verbatim + normalized query, persisted so a later request for the same
+    # company can be served from a recent COMPLETED run (see verify_flow.find_cached_run).
+    query_name: Mapped[str | None] = mapped_column(String(500))
+    query_name_normalized: Mapped[str | None] = mapped_column(String(500), index=True)
+    query_state: Mapped[str | None] = mapped_column(String(2), index=True)
+
     raw_events: Mapped[list[RawSourceEvent]] = relationship(back_populates="run")
     evidence: Mapped[list[EvidenceItem]] = relationship(back_populates="run")
     scores: Mapped[list[ConfidenceScore]] = relationship(back_populates="run")

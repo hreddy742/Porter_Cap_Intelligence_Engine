@@ -97,3 +97,11 @@ class UccSearchOutcome(StrEnum):
     NO_MATCHING_FILINGS = "no_matching_filings"
     POSSIBLE_MATCH = "possible_match"
     SOURCE_UNAVAILABLE = "source_unavailable"
+
+
+class WebhookDeliveryStatus(StrEnum):
+    """Delivery state of one signed webhook attempt for one (endpoint, run)."""
+
+    PENDING = "pending"
+    DELIVERED = "delivered"
+    FAILED = "failed"

@@ -22,10 +22,13 @@ from porter_verify.services.source_quality import (
     evaluate_source_health,
 )
 from porter_verify.services.ucc_intelligence import detect_exit_signals, record_refresh_log
+from porter_verify.services.webhooks import retry_due_deliveries
 
 log = get_logger(__name__)
 
+STUCK_RUN_SWEEP_JOB_ID = "stuck_run_sweep"
 SOURCE_QUALITY_JOB_ID = "source_quality_daily"
+WEBHOOK_RETRY_JOB_ID = "webhook_retry"
 OFAC_REFRESH_JOB_ID = "ofac_weekly_refresh"
 UCC_WEEKLY_REFRESH_JOB_ID = "ucc_weekly_refresh"
 UCC_DAILY_INCREMENTAL_JOB_ID = "ucc_daily_incremental_refresh"
@@ -107,7 +110,42 @@ def build_scheduler() -> BackgroundScheduler:
         id=SOURCE_QUALITY_JOB_ID,
         replace_existing=True,
     )
+    scheduler.add_job(
+        _sweep_stuck_runs_job,
+        "interval",
+        minutes=5,
+        id=STUCK_RUN_SWEEP_JOB_ID,
+        replace_existing=True,
+    )
+    scheduler.add_job(
+        _retry_webhook_deliveries_job,
+        "interval",
+        minutes=2,
+        id=WEBHOOK_RETRY_JOB_ID,
+        replace_existing=True,
+    )
     return scheduler
+
+
+def _retry_webhook_deliveries_job() -> None:
+    factory = sessionmaker(bind=create_db_engine(get_settings()), expire_on_commit=False)
+    with factory() as session:
+        attempted = retry_due_deliveries(session)
+        if attempted:
+            log.info("webhook_retry_job_complete", attempted=attempted)
+
+
+def _sweep_stuck_runs_job() -> None:
+    """Periodic backstop for verification runs orphaned by a crash mid-flight.
+
+    ``app.py`` runs the same sweep once at startup, which only catches runs
+    orphaned by a process restart. A long-lived process that crashes a
+    background task without restarting needs this periodic pass instead.
+    """
+    from porter_verify.api.app import _sweep_stuck_runs
+
+    factory = sessionmaker(bind=create_db_engine(get_settings()), expire_on_commit=False)
+    _sweep_stuck_runs(factory)
 
 
 def _compute_source_quality_job() -> None:

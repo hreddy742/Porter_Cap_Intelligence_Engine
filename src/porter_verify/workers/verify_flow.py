@@ -19,8 +19,9 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, timedelta
 
+from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from porter_verify.connectors.base import (
@@ -36,7 +37,7 @@ from porter_verify.services import companies
 from porter_verify.services.audit import record_audit
 from porter_verify.services.entity_resolution import Candidate, EntityQuery, Outcome, rank_results
 from porter_verify.services.evidence import EvidenceStore, canonical_json_hash
-from porter_verify.services.normalization import normalize_status
+from porter_verify.services.normalization import normalize_name, normalize_status
 from porter_verify.services.scoring import SCORING_VERSION, ScoringInput, score
 from porter_verify.services.screening import screen
 
@@ -91,6 +92,7 @@ def _finalize(
         run_status=run_status.value,
         verification_status=getattr(verification_status, "value", None),
     )
+    _dispatch_webhooks(session, run)
     return VerifyOutcome(
         run_id=run.id,
         run_status=run_status,
@@ -101,16 +103,43 @@ def _finalize(
     )
 
 
+def _dispatch_webhooks(session: Session, run: VerificationRun) -> None:
+    """Best-effort: a webhook delivery problem must never affect the run's own result."""
+
+    try:
+        from porter_verify.services.webhooks import enqueue_and_deliver
+
+        enqueue_and_deliver(session, run)
+    except Exception as exc:  # noqa: BLE001 — delivery boundary: log, never propagate
+        log.error("webhook_dispatch_failed", run_id=str(run.id), error=str(exc))
+
+
 def create_pending_run(
-    session: Session, *, trigger: str = "manual", actor: str = "system"
+    session: Session,
+    *,
+    name: str | None = None,
+    state: str | None = None,
+    idempotency_key: str | None = None,
+    trigger: str = "manual",
+    actor: str = "system",
 ) -> VerificationRun:
     """Create a PENDING verification run and return it immediately (async entry).
 
     The API creates the run synchronously so the caller gets a run_id to poll, then
-    the actual work runs in the background via ``execute_pending_run``.
+    the actual work runs in the background via ``execute_pending_run``. The query is
+    persisted on the run (``name``/``state``) so a later request can be served from
+    this run's result via ``find_cached_run`` or ``find_run_by_idempotency_key``.
     """
 
-    run = VerificationRun(status=RunStatus.PENDING, trigger=trigger, score_version=SCORING_VERSION)
+    run = VerificationRun(
+        status=RunStatus.PENDING,
+        trigger=trigger,
+        score_version=SCORING_VERSION,
+        idempotency_key=idempotency_key,
+        query_name=name,
+        query_name_normalized=normalize_name(name) if name else None,
+        query_state=state.upper() if state else None,
+    )
     session.add(run)
     session.flush()  # assign run.id before we reference it in the audit entry
     record_audit(
@@ -123,6 +152,44 @@ def create_pending_run(
     session.commit()
     log.info("verification_queued", run_id=str(run.id))
     return run
+
+
+def find_run_by_idempotency_key(session: Session, idempotency_key: str) -> VerificationRun | None:
+    """Look up a prior run created with this Idempotency-Key, if any."""
+
+    return session.scalar(
+        select(VerificationRun).where(VerificationRun.idempotency_key == idempotency_key)
+    )
+
+
+def find_cached_run(
+    session: Session, *, name: str, state: str | None, ttl_minutes: int
+) -> VerificationRun | None:
+    """Return the most recent COMPLETED run for this (name, state) if still fresh.
+
+    Avoids a redundant live source call (and charge) for a query that was just
+    verified. Callers surface the run's age so the response is honest about
+    being cached rather than a fresh lookup.
+    """
+
+    from porter_verify.db.base import utcnow
+
+    if ttl_minutes <= 0:
+        return None
+    cutoff = utcnow() - timedelta(minutes=ttl_minutes)
+    stmt = (
+        select(VerificationRun)
+        .where(
+            VerificationRun.query_name_normalized == normalize_name(name),
+            VerificationRun.query_state == (state.upper() if state else None),
+            VerificationRun.status == RunStatus.COMPLETED,
+            VerificationRun.finished_at.is_not(None),
+            VerificationRun.finished_at >= cutoff,
+        )
+        .order_by(VerificationRun.finished_at.desc())
+        .limit(1)
+    )
+    return session.scalar(stmt)
 
 
 def run_verification(

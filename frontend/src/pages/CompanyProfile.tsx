@@ -158,8 +158,8 @@ export function CompanyProfile() {
               </tr>
             </thead>
             <tbody>
-              {officers.map((o) => (
-                <tr key={o.name}>
+              {officers.map((o, i) => (
+                <tr key={i}>
                   <td>{o.name}</td>
                   <td>{o.title ?? "—"}</td>
                   <td>{o.screened_ofac == null ? "—" : o.screened_ofac ? "HIT" : "clear"}</td>

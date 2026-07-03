@@ -24,7 +24,18 @@ from sqlalchemy.orm import sessionmaker
 
 from porter_verify import __version__
 from porter_verify.api.limiter import limiter
-from porter_verify.api.routers import auth, companies, health, ofac, review, runs, sources, ucc, verify
+from porter_verify.api.routers import (
+    auth,
+    companies,
+    health,
+    ofac,
+    review,
+    runs,
+    sources,
+    ucc,
+    verify,
+    webhooks,
+)
 from porter_verify.config import Environment, Settings, get_settings
 from porter_verify.connectors.base import ConnectorRegistry
 from porter_verify.connectors.factory import build_default_registry
@@ -40,6 +51,7 @@ from porter_verify.services.ucc_intelligence import seed_known_factors
 log = get_logger(__name__)
 
 _STUCK_RUN_CUTOFF_MINUTES = 10
+_STUCK_RUNNING_CUTOFF_MINUTES = 20
 
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
@@ -62,25 +74,36 @@ def _run_migrations(settings: Settings) -> None:
 
 
 def _sweep_stuck_runs(session_factory: sessionmaker) -> None:
-    """Mark PENDING runs older than 10 min as FAILED.
+    """Mark PENDING/RUNNING runs older than their cutoff as FAILED.
 
-    These are runs whose background task was lost when the process restarted.
-    Without this, a crashed run blocks the client UI polling forever.
+    PENDING runs never picked up, and RUNNING runs whose background task died
+    mid-execution (e.g. a process crash or restart), both leave a client polling
+    forever with no terminal state. RUNNING gets a longer cutoff since a live
+    connector call can legitimately take longer than a scheduling delay would.
+    Called at startup and periodically (see scheduler.py) so a crash is caught
+    even if the process never restarts.
     """
-    cutoff = utcnow() - timedelta(minutes=_STUCK_RUN_CUTOFF_MINUTES)
+    pending_cutoff = utcnow() - timedelta(minutes=_STUCK_RUN_CUTOFF_MINUTES)
+    running_cutoff = utcnow() - timedelta(minutes=_STUCK_RUNNING_CUTOFF_MINUTES)
     with session_factory() as session:
         result = session.execute(
             update(VerificationRun)
             .where(
-                VerificationRun.status == RunStatus.PENDING,
-                VerificationRun.started_at < cutoff,
+                (
+                    (VerificationRun.status == RunStatus.PENDING)
+                    & (VerificationRun.started_at < pending_cutoff)
+                )
+                | (
+                    (VerificationRun.status == RunStatus.RUNNING)
+                    & (VerificationRun.started_at < running_cutoff)
+                )
             )
             .values(status=RunStatus.FAILED, finished_at=utcnow())
         )
         swept = result.rowcount
         session.commit()
     if swept:
-        log.warning("stuck_runs_swept", count=swept, cutoff_minutes=_STUCK_RUN_CUTOFF_MINUTES)
+        log.warning("stuck_runs_swept", count=swept)
     else:
         log.info("stuck_run_sweep_clean")
 
@@ -154,7 +177,7 @@ def create_app(
         allow_headers=["*"],
     )
 
-    for module in (auth, health, verify, companies, runs, review, sources, ucc, ofac):
+    for module in (auth, health, verify, companies, runs, review, sources, ucc, ofac, webhooks):
         app.include_router(module.router)
 
     @app.exception_handler(Exception)

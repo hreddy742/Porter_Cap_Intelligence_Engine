@@ -61,6 +61,13 @@ class Settings(BaseSettings):
     ofac_alt_path: str = "./data/ofac_alt.csv"
     fl_ucc_zip_dir: str = "./data/florida_ucc"
 
+    # --- verification cache -------------------------------------------------
+    # A repeated /verify request for the same (name, state) within this window
+    # is served from the prior COMPLETED run instead of re-querying (and
+    # re-charging) the live source. The response marks itself cached/aged so
+    # callers can tell it apart from a fresh lookup.
+    verify_cache_ttl_minutes: int = 1440
+
     # --- API authentication -----------------------------------------------
     # Comma-separated triples: email:role:key
     # Example: alice@portercap.net:sales:sk-v1-s-abc123,bob@portercap.net:admin:sk-v1-a-xyz789

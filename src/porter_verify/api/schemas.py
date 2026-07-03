@@ -21,6 +21,7 @@ from porter_verify.db.enums import (
     UccSearchOutcome,
     UccSearchStatus,
     VerificationStatus,
+    WebhookDeliveryStatus,
 )
 
 
@@ -36,6 +37,8 @@ class VerifyResponse(BaseModel):
     company_id: uuid.UUID | None
     match_confidence: float | None
     message: str
+    cached: bool = False
+    cache_age_seconds: int | None = None
 
 
 class RegistryVerifyResponse(BaseModel):
@@ -430,3 +433,45 @@ class SourceQualityOut(BaseModel):
 
 class ErrorResponse(BaseModel):
     detail: str
+
+
+class WebhookEndpointCreate(BaseModel):
+    url: str = Field(min_length=1, max_length=1000)
+    description: str | None = Field(default=None, max_length=255)
+
+
+class WebhookEndpointOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    url: str
+    enabled: bool
+    description: str | None
+    created_by_email: str
+    created_at: datetime
+
+
+class WebhookEndpointCreated(WebhookEndpointOut):
+    """Returned only from the create call -- the secret is never shown again."""
+
+    secret: str
+
+
+class WebhookEndpointUpdate(BaseModel):
+    enabled: bool
+
+
+class WebhookDeliveryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    endpoint_id: uuid.UUID
+    verification_run_id: uuid.UUID
+    event_type: str
+    status: WebhookDeliveryStatus
+    attempt_count: int
+    last_attempt_at: datetime | None
+    next_retry_at: datetime | None
+    response_code: int | None
+    error: str | None
+    created_at: datetime

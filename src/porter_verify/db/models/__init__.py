@@ -47,6 +47,7 @@ from porter_verify.db.models.verification import (
     RawSourceEvent,
     VerificationRun,
 )
+from porter_verify.db.models.webhook import WebhookDelivery, WebhookEndpoint
 
 __all__ = [
     "AuditLog",
@@ -86,4 +87,6 @@ __all__ = [
     "UccRefreshLog",
     "UccSearchOrder",
     "VerificationRun",
+    "WebhookDelivery",
+    "WebhookEndpoint",
 ]
