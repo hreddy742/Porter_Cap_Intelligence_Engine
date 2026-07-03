@@ -18,6 +18,7 @@ dependencies = [
     "apscheduler>=3.10",
     "inflate64>=1.0",
     "slowapi>=0.1.9",
+    "playwright>=1.45",
 ]
 
 [project.optional-dependencies]

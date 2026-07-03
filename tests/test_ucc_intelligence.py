@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from porter_verify.api.app import create_app
 from porter_verify.api.routers import ucc as ucc_router
+from porter_verify.api.security import _build_key_map
+from porter_verify.config import get_settings
 from porter_verify.connectors.idaho_ucc import IdahoUccSearchResult
 from porter_verify.connectors.washington_ucc import ingest_washington_ucc_file
 from porter_verify.db.base import utcnow
@@ -26,8 +28,22 @@ from porter_verify.services.ucc_intelligence import (
 )
 
 
+_TEST_API_KEYS = {role: f"sk-test-{role}" for role in ("sales", "underwriter", "ops", "admin", "compliance")}
+
+
 def _headers(role: str = "ops") -> dict[str, str]:
-    return {"X-User-Email": f"{role}@porter.local", "X-User-Role": role}
+    return {"Authorization": f"Bearer {_TEST_API_KEYS[role]}"}
+
+
+@pytest.fixture(autouse=True)
+def _configure_test_api_keys(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    raw = ",".join(f"{role}@porter.local:{role}:{key}" for role, key in _TEST_API_KEYS.items())
+    monkeypatch.setenv("PORTER_API_KEYS", raw)
+    get_settings.cache_clear()
+    _build_key_map.cache_clear()
+    yield
+    get_settings.cache_clear()
+    _build_key_map.cache_clear()
 
 
 @pytest.fixture
@@ -224,7 +240,9 @@ def test_public_search_endpoint_ingests_supported_state(
             )
         ]
 
-    monkeypatch.setattr(ucc_router, "search_idaho_ucc", fake_search)
+    from porter_verify.connectors import idaho_ucc
+
+    monkeypatch.setattr(idaho_ucc, "search_idaho_ucc", fake_search)
 
     response = client.post(
         "/ucc/public-search",
@@ -243,7 +261,7 @@ def test_public_search_endpoint_ingests_supported_state(
 def test_public_search_endpoint_reports_unsupported_state(client: TestClient) -> None:
     response = client.post(
         "/ucc/public-search",
-        json={"company": "ACME", "state": "IN"},
+        json={"company": "ACME", "state": "TN"},
         headers=_headers(),
     )
 
@@ -251,7 +269,8 @@ def test_public_search_endpoint_reports_unsupported_state(client: TestClient) ->
     body = response.json()
     assert body["supported"] is False
     assert body["imported_count"] == 0
-    assert "ID and NJ" in body["message"]
+    assert "ID" in body["message"]
+    assert "not TN" in body["message"]
 
 
 def test_ucc_coverage_reports_loaded_and_blocked_states(client: TestClient) -> None:
@@ -276,7 +295,7 @@ def test_ucc_coverage_reports_loaded_and_blocked_states(client: TestClient) -> N
     assert states["CO"]["last_refresh"] is not None
     assert states["ID"]["status"] == "targeted_public_search"
     assert states["IA"]["status"] == "blocked"
-    assert states["MI"]["status"] == "blocked"
+    assert states["MI"]["status"] == "targeted_public_search"
     assert states["NJ"]["status"] == "targeted_public_search"
     assert states["IN"]["status"] == "blocked"
     assert states["IN"]["record_count"] == 0

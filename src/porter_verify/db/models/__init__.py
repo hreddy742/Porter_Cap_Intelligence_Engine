@@ -36,6 +36,7 @@ from porter_verify.db.models.ucc import (
     KnownFactor,
     UccExitSignal,
     UccFiling,
+    UccLead,
     UccRefreshLog,
     UccSearchOrder,
 )
@@ -81,6 +82,7 @@ __all__ = [
     "User",
     "UccExitSignal",
     "UccFiling",
+    "UccLead",
     "UccRefreshLog",
     "UccSearchOrder",
     "VerificationRun",

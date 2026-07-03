@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date
+from typing import Callable
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -176,3 +177,161 @@ def _status(value: str, filing_type: str) -> str:
     if filing_type == "AMENDMENT":
         return "AMENDED"
     return value.upper() if value else "ACTIVE"
+
+
+def _run_new_jersey(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.new_jersey_ucc import search_new_jersey_ucc
+    from porter_verify.connectors.new_jersey_ucc import (
+        to_public_search_results as to_results,
+    )
+
+    return to_results(company, search_new_jersey_ucc(company))
+
+
+def _run_idaho(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.idaho_ucc import search_idaho_ucc
+    from porter_verify.connectors.idaho_ucc import to_public_search_results as to_results
+
+    return to_results(company, search_idaho_ucc(company))
+
+
+def _run_ny(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.ny_ucc import search_ny_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_ny_ucc(company))
+
+
+def _run_ca(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.ca_ucc import search_ca_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_ca_ucc(company))
+
+
+def _run_il(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.il_ucc import search_il_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_il_ucc(company))
+
+
+def _run_pa(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.pa_ucc import search_pa_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_pa_ucc(company))
+
+
+def _run_mi(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.mi_ucc import search_mi_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_mi_ucc(company))
+
+
+def _run_nc(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.nc_ucc import search_nc_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_nc_ucc(company))
+
+
+def _run_md(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.md_ucc import search_md_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_md_ucc(company))
+
+
+def _run_mn(company: str) -> list[PublicSearchUccResult]:
+    # mn_ucc.search_mn_ucc already returns PublicSearchUccResult objects
+    # directly (debtor-name search requires a paid MBLS account and raises
+    # MnUccAuthRequired / MnUccPaywallError if credentials are missing).
+    from porter_verify.connectors.mn_ucc import search_mn_ucc
+
+    return search_mn_ucc(company)
+
+
+def _run_sc(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.sc_ucc import search_sc_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_sc_ucc(company))
+
+
+def _run_ky(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.ky_ucc import search_ky_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_ky_ucc(company))
+
+
+def _run_mo(company: str) -> list[PublicSearchUccResult]:
+    # mo_ucc.search_mo_ucc always raises MissouriUccAuthRequiredError today;
+    # MO's UCC search portal requires an authenticated Corporate E-account.
+    from porter_verify.connectors.mo_ucc import search_mo_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_mo_ucc(company))
+
+
+def _run_az(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.az_ucc import search_az_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_az_ucc(company))
+
+
+def _run_wi(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.wi_ucc import search_wi_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_wi_ucc(company))
+
+
+def _run_in(company: str) -> list[PublicSearchUccResult]:
+    # in_ucc.search_in_ucc always raises InUccCaptchaRequiredError today;
+    # IN's UCC search portal requires solving a CAPTCHA.
+    from porter_verify.connectors.in_ucc import search_in_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_in_ucc(company))
+
+
+def _run_nv(company: str) -> list[PublicSearchUccResult]:
+    # nv_ucc.search_nv_ucc always raises NvUccBlockedError today; both known
+    # NV UCC search entry points are bot-management blocked.
+    from porter_verify.connectors.nv_ucc import search_nv_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_nv_ucc(company))
+
+
+def _run_ar(company: str) -> list[PublicSearchUccResult]:
+    from porter_verify.connectors.ar_ucc import search_ar_ucc, to_public_search_results
+
+    return to_public_search_results(company, search_ar_ucc(company))
+
+
+# Registry of every state supported via targeted live public search (as
+# opposed to bulk-loaded states, which are ingested via scheduler.py cron
+# jobs calling fetch_XX_ucc_rows/ingest_XX_ucc_rows). Each callable takes a
+# company name and returns a list of PublicSearchUccResult ready for
+# ingest_public_search_results(). Imports are deferred to avoid pulling in
+# every connector's dependencies (httpx, playwright, etc.) at import time.
+SUPPORTED_STATES: dict[str, Callable[[str], list[PublicSearchUccResult]]] = {
+    "NJ": _run_new_jersey,
+    "ID": _run_idaho,
+    "NY": _run_ny,
+    "CA": _run_ca,
+    "IL": _run_il,
+    "PA": _run_pa,
+    "MI": _run_mi,
+    "NC": _run_nc,
+    "MD": _run_md,
+    "MN": _run_mn,
+    "SC": _run_sc,
+    "KY": _run_ky,
+    "MO": _run_mo,
+    "AZ": _run_az,
+    "WI": _run_wi,
+    "IN": _run_in,
+    "NV": _run_nv,
+    "AR": _run_ar,
+}
+
+
+def run_targeted_search(state: str, company_name: str) -> list[PublicSearchUccResult]:
+    """Run the targeted public search connector for ``state`` if supported.
+
+    Raises KeyError if the state is not in SUPPORTED_STATES.
+    """
+    handler = SUPPORTED_STATES[state.upper()]
+    return handler(company_name)

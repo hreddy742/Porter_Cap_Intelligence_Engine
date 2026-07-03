@@ -17,6 +17,7 @@ from porter_verify.db.enums import (
     RegistrationStatus,
     ReviewDecision,
     RunStatus,
+    UccLeadStatus,
     UccSearchOutcome,
     UccSearchStatus,
     VerificationStatus,
@@ -298,6 +299,7 @@ class UccCoverageResponse(BaseModel):
 class UccExitSignalOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    id: str
     debtor_name: str
     state: str
     previous_factor: str | None
@@ -308,6 +310,28 @@ class UccExitSignalOut(BaseModel):
     days_since_exit: int
     replacement_filed: bool
     signal_strength: str
+
+
+class UccLeadOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    exit_signal_id: str
+    company_id: uuid.UUID | None
+    debtor_name: str
+    state: str
+    status: UccLeadStatus
+    assigned_to_email: str | None
+    notes: str | None
+    created_by_email: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class UccLeadUpdate(BaseModel):
+    status: UccLeadStatus | None = None
+    assigned_to_email: str | None = None
+    notes: str | None = None
 
 
 class KnownFactorCreate(BaseModel):

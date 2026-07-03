@@ -9,7 +9,7 @@ from sqlalchemy import Boolean, Date, DateTime, Enum, ForeignKey, Integer, Strin
 from sqlalchemy.orm import Mapped, mapped_column
 
 from porter_verify.db.base import Base, TimestampMixin, uuid_pk
-from porter_verify.db.enums import UccSearchOutcome, UccSearchStatus
+from porter_verify.db.enums import UccLeadStatus, UccSearchOutcome, UccSearchStatus
 
 
 class UccSearchOrder(Base, TimestampMixin):
@@ -101,6 +101,36 @@ class UccExitSignal(Base):
     replacement_filed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     signal_strength: Mapped[str] = mapped_column(String(10), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+
+
+class UccLead(Base, TimestampMixin):
+    """A UCC-3 exit signal promoted into an actionable, trackable sales lead.
+
+    One lead per exit signal (enforced by the unique constraint on
+    ``exit_signal_id``) -- promoting an already-promoted signal is a no-op
+    that returns the existing lead rather than duplicating it.
+    """
+
+    __tablename__ = "ucc_leads"
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    exit_signal_id: Mapped[str] = mapped_column(
+        ForeignKey("ucc_exit_signals.id"), nullable=False, unique=True, index=True
+    )
+    company_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("companies.id"), index=True
+    )
+    debtor_name: Mapped[str] = mapped_column(String(500), nullable=False)
+    state: Mapped[str] = mapped_column(String(2), nullable=False, index=True)
+    status: Mapped[UccLeadStatus] = mapped_column(
+        Enum(UccLeadStatus, native_enum=False, length=20),
+        default=UccLeadStatus.NEW,
+        nullable=False,
+        index=True,
+    )
+    assigned_to_email: Mapped[str | None] = mapped_column(String(320))
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_by_email: Mapped[str] = mapped_column(String(320), nullable=False)
 
 
 class UccRefreshLog(Base):

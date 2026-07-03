@@ -17,6 +17,8 @@ from porter_verify.api.schemas import (
     UccCoverageOut,
     UccCoverageResponse,
     UccExitSignalOut,
+    UccLeadOut,
+    UccLeadUpdate,
     UccLookupResponse,
     UccManualSearchCreate,
     UccPublicSearchCreate,
@@ -27,30 +29,26 @@ from porter_verify.api.schemas import (
     UccTerminatedFilingOut,
 )
 from porter_verify.api.security import CurrentUser, require_roles
-from porter_verify.connectors.idaho_ucc import (
-    search_idaho_ucc,
-)
-from porter_verify.connectors.idaho_ucc import (
-    to_public_search_results as idaho_public_search_results,
-)
-from porter_verify.connectors.new_jersey_ucc import (
-    search_new_jersey_ucc,
-)
-from porter_verify.connectors.new_jersey_ucc import (
-    to_public_search_results as new_jersey_public_search_results,
-)
 from porter_verify.db.base import utcnow
 from porter_verify.db.enums import RegistrationStatus, UccSearchStatus
-from porter_verify.db.models import Company, UccExitSignal, UccFiling, UccRefreshLog, UccSearchOrder
+from porter_verify.db.models import (
+    Company,
+    UccExitSignal,
+    UccFiling,
+    UccLead,
+    UccRefreshLog,
+    UccSearchOrder,
+)
 from porter_verify.services.audit import record_audit
 from porter_verify.services.companies import upsert_company
+from porter_verify.services.normalization import dedupe_key, normalize_name
 from porter_verify.services.ucc_intelligence import (
     add_known_factor,
     find_ucc_filings,
     known_factors,
     normalize_ucc_name,
 )
-from porter_verify.services.ucc_public_search import ingest_public_search_results
+from porter_verify.services.ucc_public_search import SUPPORTED_STATES, ingest_public_search_results, run_targeted_search
 
 router = APIRouter(tags=["ucc"])
 
@@ -79,8 +77,32 @@ _UCC_COVERAGE = {
         "status": "blocked",
         "source_url": "https://bsd.sos.in.gov/PublicUCCSearch",
         "notes": (
-            "Indiana public search currently blocks automated access with "
-            "IP/CAPTCHA controls."
+            "Indiana has no free bulk UCC dataset. Confirmed live "
+            "(2026-07-02) that the free public debtor-name search requires "
+            "solving a CAPTCHA before returning results. Connector raises "
+            "InUccCaptchaRequiredError rather than silently returning zero "
+            "results."
+        ),
+    },
+    "NV": {
+        "status": "blocked",
+        "source_url": "https://www.nvsos.gov/sos/businesses/liens-ucc-and-federal-tax-liens/ucc-search",
+        "notes": (
+            "Nevada has no free bulk UCC dataset. Confirmed live "
+            "(2026-07-02) that both plausible UCC search entry points are "
+            "bot-management blocked: nvsos.gov returns an Akamai 'Access "
+            "Denied' page, and esos.nv.gov returns an Incapsula bot-"
+            "management challenge (same vendor confirmed blocking CA). "
+            "Connector raises NvUccBlockedError."
+        ),
+    },
+    "AR": {
+        "status": "targeted_public_search",
+        "source_url": "https://bcs.sos.arkansas.gov/search/ucc",
+        "notes": (
+            "Arkansas has no free bulk UCC dataset. Confirmed live "
+            "(2026-07-02): targeted search via Playwright works with no "
+            "bot-management block, returning real filing data."
         ),
     },
     "IA": {
@@ -89,14 +111,6 @@ _UCC_COVERAGE = {
         "notes": (
             "Iowa has a public UCC search UI, but direct connector calls require "
             "a browser reCAPTCHA token."
-        ),
-    },
-    "MI": {
-        "status": "blocked",
-        "source_url": "https://ucc.michigan.gov/ucc-search",
-        "notes": (
-            "Michigan has a public UCC search UI, but the underlying API returned "
-            "401 without an authorized browser session."
         ),
     },
     "NJ": {
@@ -128,6 +142,147 @@ _UCC_COVERAGE = {
             "requires reCAPTCHA verification before adding a debtor term."
         ),
     },
+    "NY": {
+        "status": "targeted_public_search",
+        "source_url": "https://ucc-efiling.dos.ny.gov/OnlineUCCSearch/OnlineUCCSearch",
+        "notes": (
+            "New York has no free bulk UCC dataset. Confirmed live "
+            "(2026-07-03): targeted search via Playwright works (fixed the "
+            "real radio/field selectors), returning 383 matches for a test "
+            "query; only the first page (10 results) is currently read."
+        ),
+    },
+    "CA": {
+        "status": "blocked",
+        "source_url": "https://bizfileonline.sos.ca.gov/search/ucc",
+        "notes": (
+            "California has no free bulk UCC dataset (bulk downloads require a "
+            "paid SOS account). Confirmed live (2026-07-03) that the search "
+            "portal is behind Incapsula bot-management -- Playwright gets "
+            "redirected to an _Incapsula_Resource challenge frame instead of "
+            "the real app. Connector raises CaUccBlockedError rather than "
+            "silently returning zero results."
+        ),
+    },
+    "IL": {
+        "status": "blocked",
+        "source_url": "https://apps.ilsos.gov/uccsearch/",
+        "notes": (
+            "Illinois has no free bulk UCC dataset (bulk access costs $2,500 "
+            "one-time + $200/week). Confirmed live (2026-07-03) that the "
+            "search portal is bot-managed: repeated attempts produced a 403 "
+            "WAF block page, a connection timeout, and a 200 that never "
+            "actually executed the search -- inconsistent, but genuinely "
+            "blocked. Connector raises IlUccBlockedError on a detected block."
+        ),
+    },
+    "PA": {
+        "status": "blocked",
+        "source_url": "https://file.dos.pa.gov/search/ucc",
+        "notes": (
+            "Pennsylvania has no free bulk UCC dataset; certified searches "
+            "require a paper UCC11 form. Confirmed live (2026-07-03) that "
+            "the search portal is behind Cloudflare bot-management (403 "
+            "challenge page with a Ray ID), the same class of block "
+            "confirmed for AZ and NC. Connector raises PaUccBlockedError."
+        ),
+    },
+    "MI": {
+        "status": "targeted_public_search",
+        "source_url": "https://ucc.michigan.gov/ucc-search",
+        "notes": (
+            "Michigan's public search is an Angular SPA. Confirmed live "
+            "(2026-07-03): no bot-management block encountered; Playwright "
+            "automation of the Angular Material results table works "
+            "correctly, returning real filing data."
+        ),
+    },
+    "NC": {
+        "status": "blocked",
+        "source_url": "https://www.sosnc.gov/online_services/search/by_title/_uniform_commercial_code",
+        "notes": (
+            "North Carolina has no free bulk UCC dataset (paid FTP "
+            "subscription only, $4,000-$5,200/yr). Confirmed live "
+            "(2026-07-03) that sosnc.gov is behind Cloudflare bot-management "
+            "-- even a real headless Chromium session gets a 403 with a "
+            "Cloudflare challenge redirect. Connector raises NcUccBlockedError "
+            "rather than silently returning zero results."
+        ),
+    },
+    "MD": {
+        "status": "blocked",
+        "source_url": "https://egov.maryland.gov/SDAT/UCCFiling/UCCMainPage.aspx",
+        "notes": (
+            "Maryland has no free bulk UCC dataset. Confirmed live (real "
+            "Playwright session, correct search field) that the free public "
+            "Name Search requires solving a CAPTCHA before returning results "
+            "-- connector raises MdUccCaptchaRequiredError rather than "
+            "silently returning zero results."
+        ),
+    },
+    "MN": {
+        "status": "targeted_public_search",
+        "source_url": "https://mblsportal.sos.mn.gov/Secured/SearchUCC",
+        "notes": (
+            "Minnesota supports free file-number lookups. Debtor-name search "
+            "requires a paid MBLS account (MN_UCC_USERNAME/MN_UCC_PASSWORD); "
+            "raises MnUccAuthRequired/MnUccPaywallError without credentials."
+        ),
+    },
+    "SC": {
+        "status": "targeted_public_search",
+        "source_url": "https://ucconline.sc.gov/UCCFiling/MainMenu.aspx",
+        "notes": (
+            "South Carolina has no free bulk UCC dataset ($12,000/yr paid "
+            "subscriber feed). Confirmed live (2026-07-03): the free public "
+            "Name Search works with no CAPTCHA via a two-step flow (name "
+            "match selection, then filing retrieval) automated with "
+            "Playwright."
+        ),
+    },
+    "KY": {
+        "status": "targeted_public_search",
+        "source_url": "https://web.sos.ky.gov/ftucc/search.aspx",
+        "notes": (
+            "Kentucky's only bulk feed is a paid ($1,500/mo) OIDC-gated Bulk "
+            "Data Service. Confirmed live (2026-07-03): targeted public "
+            "search works via plain HTTP (no bot-detection/CAPTCHA), "
+            "combining standard + fuzzy-match result tables."
+        ),
+    },
+    "MO": {
+        "status": "blocked",
+        "source_url": "https://bsd.sos.mo.gov/LoginWelcome.aspx?lobID=0",
+        "notes": (
+            "Missouri gates all UCC search access behind a Corporate "
+            "E-account (ACH pre-note setup, ~7 business days); no free "
+            "unauthenticated search path exists. Connector raises "
+            "MissouriUccAuthRequiredError until account access is secured."
+        ),
+    },
+    "AZ": {
+        "status": "blocked",
+        "source_url": "https://apps.azsos.gov/apps/ucc/search/",
+        "notes": (
+            "Arizona bulk UCC data is a paid product ($2,000 one-time or "
+            "$1,800/yr). The public search portal is protected by Cloudflare "
+            "bot-management: confirmed live that the search POST returns 403 "
+            "even from a real headless Chromium session, after the initial "
+            "page load succeeds. Connector raises AzUccBlockedError rather "
+            "than silently returning zero results."
+        ),
+    },
+    "WI": {
+        "status": "targeted_public_search",
+        "source_url": "https://wims.dfi.wi.gov/uccsearch",
+        "notes": (
+            "Wisconsin DFI sells weekly bulk files ($250/file or $500/mo); "
+            "no free bulk dataset exists. Confirmed live (2026-07-03): "
+            "targeted search via Playwright automation of the WIMS Angular "
+            "SPA works (fixed the Individual/Organization mat-select "
+            "interaction)."
+        ),
+    },
 }
 
 
@@ -150,14 +305,9 @@ def public_search_ucc(
 ) -> UccPublicSearchResponse:
     state = request.state.upper()
     company = request.company.strip()
-    if state == "NJ":
-        source_rows = search_new_jersey_ucc(company)
-        results = new_jersey_public_search_results(company, source_rows)
-    elif state == "ID":
-        source_rows = search_idaho_ucc(company)
-        results = idaho_public_search_results(company, source_rows)
-    else:
+    if state not in SUPPORTED_STATES:
         lookup = _lookup_response(session, company, state)
+        supported_list = ", ".join(sorted(SUPPORTED_STATES))
         return UccPublicSearchResponse(
             state=state,
             company=company,
@@ -165,8 +315,25 @@ def public_search_ucc(
             imported_count=0,
             message=(
                 "Live targeted public search is currently supported for "
-                f"ID and NJ, not {state}."
+                f"{supported_list}, not {state}."
             ),
+            lookup=lookup,
+        )
+
+    try:
+        results = run_targeted_search(state, company)
+    except RuntimeError as exc:
+        # Every connector-level "search is blocked/gated" exception (e.g.
+        # AzUccBlockedError, MdUccCaptchaRequiredError, MissouriUccAuthRequiredError)
+        # is a RuntimeError. Surface it as a clean, typed response instead
+        # of letting it crash the request with an unhandled 500.
+        lookup = _lookup_response(session, company, state)
+        return UccPublicSearchResponse(
+            state=state,
+            company=company,
+            supported=True,
+            imported_count=0,
+            message=f"{state} live search could not complete: {exc}",
             lookup=lookup,
         )
 
@@ -307,6 +474,92 @@ def list_exit_signals(
             .limit(limit)
         )
     )
+
+
+@router.post("/ucc/exits/{signal_id}/promote", response_model=UccLeadOut, status_code=201)
+def promote_exit_signal(
+    signal_id: str,
+    session: Session = Depends(get_session),
+    user: CurrentUser = Depends(require_roles("sales", "underwriter", "ops", "compliance")),
+) -> UccLead:
+    """Promote a UCC-3 exit signal into an actionable, trackable lead.
+
+    Idempotent: promoting an already-promoted signal returns the existing
+    lead rather than raising or creating a duplicate.
+    """
+    signal = session.get(UccExitSignal, signal_id)
+    if signal is None:
+        raise HTTPException(status_code=404, detail="Exit signal not found.")
+
+    existing = session.scalar(
+        select(UccLead).where(UccLead.exit_signal_id == signal_id)
+    )
+    if existing is not None:
+        return existing
+
+    company = session.scalar(
+        select(Company).where(
+            Company.dedupe_key == dedupe_key(signal.state, normalize_name(signal.debtor_name))
+        )
+    )
+    lead = UccLead(
+        id=uuid.uuid4(),
+        exit_signal_id=signal_id,
+        company_id=company.id if company else None,
+        debtor_name=signal.debtor_name,
+        state=signal.state,
+        created_by_email=user.email,
+    )
+    session.add(lead)
+    session.commit()
+    session.refresh(lead)
+    return lead
+
+
+@router.get("/ucc/leads", response_model=list[UccLeadOut])
+def list_leads(
+    status: str | None = Query(default=None),
+    state: str | None = Query(default=None, min_length=2, max_length=2),
+    limit: int = Query(default=50, ge=1, le=200),
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_roles("sales", "underwriter", "ops", "compliance")),
+) -> list[UccLead]:
+    filters = []
+    if status:
+        filters.append(UccLead.status == status)
+    if state:
+        filters.append(UccLead.state == state.upper())
+    return list(
+        session.scalars(
+            select(UccLead)
+            .where(*filters)
+            .order_by(UccLead.created_at.desc())
+            .limit(limit)
+        )
+    )
+
+
+@router.patch("/ucc/leads/{lead_id}", response_model=UccLeadOut)
+def update_lead(
+    lead_id: uuid.UUID,
+    request: UccLeadUpdate,
+    session: Session = Depends(get_session),
+    _user: CurrentUser = Depends(require_roles("sales", "underwriter", "ops", "compliance")),
+) -> UccLead:
+    lead = session.get(UccLead, lead_id)
+    if lead is None:
+        raise HTTPException(status_code=404, detail="Lead not found.")
+
+    if request.status is not None:
+        lead.status = request.status
+    if request.assigned_to_email is not None:
+        lead.assigned_to_email = request.assigned_to_email
+    if request.notes is not None:
+        lead.notes = request.notes
+
+    session.commit()
+    session.refresh(lead)
+    return lead
 
 
 @router.get("/ucc/known-factors", response_model=list[KnownFactorOut])

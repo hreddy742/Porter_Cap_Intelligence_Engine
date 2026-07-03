@@ -13,6 +13,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from porter_verify.api.app import create_app
+from porter_verify.api.security import _build_key_map
 from porter_verify.config import get_settings
 from porter_verify.connectors.factory import build_default_registry
 from porter_verify.db import models  # noqa: F401  (register tables)
@@ -28,8 +29,23 @@ from porter_verify.services.ofac import get_ofac_metadata_by_name
 from porter_verify.services.screening import get_sanctions_list
 
 
+_TEST_API_KEYS = {role: f"sk-test-{role}" for role in ("sales", "underwriter", "ops", "admin", "compliance")}
+
+
 def _headers(role: str, email: str | None = None) -> dict[str, str]:
-    return {"X-User-Email": email or f"{role}@portercap.net", "X-User-Role": role}
+    del email  # identity now comes from the server-side key map, not the caller
+    return {"Authorization": f"Bearer {_TEST_API_KEYS[role]}"}
+
+
+@pytest.fixture(autouse=True)
+def _configure_test_api_keys(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    raw = ",".join(f"{role}@portercap.net:{role}:{key}" for role, key in _TEST_API_KEYS.items())
+    monkeypatch.setenv("PORTER_API_KEYS", raw)
+    get_settings.cache_clear()
+    _build_key_map.cache_clear()
+    yield
+    get_settings.cache_clear()
+    _build_key_map.cache_clear()
 
 
 def _verify_and_wait(
@@ -86,7 +102,7 @@ def test_local_127_origin_passes_cors_preflight(client: TestClient) -> None:
         headers={
             "Origin": "http://127.0.0.1:5173",
             "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "content-type,x-user-email,x-user-role",
+            "Access-Control-Request-Headers": "content-type,authorization",
         },
     )
 
@@ -106,7 +122,7 @@ def test_verify_rejects_unknown_role(client: TestClient) -> None:
     resp = client.post(
         "/verify",
         json={"name": "Acme Logistics LLC", "state": "TX"},
-        headers={"X-User-Email": "x@portercap.net", "X-User-Role": "wizard"},
+        headers={"Authorization": "Bearer sk-not-a-real-key"},
     )
     assert resp.status_code == 401
 

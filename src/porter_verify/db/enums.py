@@ -81,6 +81,15 @@ class UccSearchStatus(StrEnum):
     COMPLETED = "completed"
 
 
+class UccLeadStatus(StrEnum):
+    """Pipeline status of a UCC-3 exit signal promoted into a working lead."""
+
+    NEW = "new"
+    CONTACTED = "contacted"
+    QUALIFIED = "qualified"
+    DEAD = "dead"
+
+
 class UccSearchOutcome(StrEnum):
     """Conservative result vocabulary for a completed UCC name search."""
 
