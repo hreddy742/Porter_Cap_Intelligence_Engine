@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -16,10 +17,15 @@ from porter_verify.db.base import utcnow
 from porter_verify.db.session import create_db_engine
 from porter_verify.logging_config import get_logger
 from porter_verify.services.ofac_refresh import refresh_ofac_files
+from porter_verify.services.source_quality import (
+    compute_daily_source_quality,
+    evaluate_source_health,
+)
 from porter_verify.services.ucc_intelligence import detect_exit_signals, record_refresh_log
 
 log = get_logger(__name__)
 
+SOURCE_QUALITY_JOB_ID = "source_quality_daily"
 OFAC_REFRESH_JOB_ID = "ofac_weekly_refresh"
 UCC_WEEKLY_REFRESH_JOB_ID = "ucc_weekly_refresh"
 UCC_DAILY_INCREMENTAL_JOB_ID = "ucc_daily_incremental_refresh"
@@ -93,7 +99,31 @@ def build_scheduler() -> BackgroundScheduler:
         id=UCC_DAILY_INCREMENTAL_JOB_ID,
         replace_existing=True,
     )
+    scheduler.add_job(
+        _compute_source_quality_job,
+        "cron",
+        hour=1,
+        minute=0,
+        id=SOURCE_QUALITY_JOB_ID,
+        replace_existing=True,
+    )
     return scheduler
+
+
+def _compute_source_quality_job() -> None:
+    factory = sessionmaker(bind=create_db_engine(get_settings()), expire_on_commit=False)
+    with factory() as session:
+        # Compute yesterday's metrics: the day just finished has a complete
+        # set of events, whereas "today" is still accumulating them.
+        target_date = (utcnow() - timedelta(days=1)).date()
+        updated = compute_daily_source_quality(session, metric_date=target_date)
+        changed = evaluate_source_health(session)
+        log.info(
+            "source_quality_job_complete",
+            metric_date=str(target_date),
+            sources_updated=updated,
+            health_changed=changed,
+        )
 
 
 def _refresh_ofac_job() -> None:

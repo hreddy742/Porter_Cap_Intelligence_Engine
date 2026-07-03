@@ -398,6 +398,10 @@ class SourcePolicyOut(SourcePolicyUpdate):
     approved_at: datetime | None
 
 
+class SourceEnabledUpdate(BaseModel):
+    enabled: bool
+
+
 class SourceHealthOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

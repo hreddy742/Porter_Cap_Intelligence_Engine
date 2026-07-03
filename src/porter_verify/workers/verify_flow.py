@@ -235,6 +235,27 @@ def _execute(
         states=sorted(connector.states),
     )
 
+    # 1b. Respect the kill switch: an admin-disabled source is treated the
+    # same as "no connector available" -- no charge, no attempted call.
+    if not source.enabled:
+        session.add(
+            ErrorLog(
+                source_id=source.id,
+                run_id=run.id,
+                error_type="source_disabled",
+                message=f"Source {connector.name!r} is disabled by an admin kill switch.",
+            )
+        )
+        return _finalize(
+            session,
+            run,
+            run_status=RunStatus.SOURCE_UNAVAILABLE,
+            verification_status=VerificationStatus.INSUFFICIENT_EVIDENCE,
+            actor=actor,
+            company_id=None,
+            message="The data source has been disabled by an administrator.",
+        )
+
     # 2. Search the source. An outage finishes the run without charge.
     try:
         results = connector.search(ConnectorQuery(name=name, state=state))
