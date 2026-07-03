@@ -10,7 +10,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import timedelta
+from pathlib import Path
 
+from alembic import command
+from alembic.config import Config as AlembicConfig
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -37,6 +40,25 @@ from porter_verify.services.ucc_intelligence import seed_known_factors
 log = get_logger(__name__)
 
 _STUCK_RUN_CUTOFF_MINUTES = 10
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
+def _run_migrations(settings: Settings) -> None:
+    """Apply any pending Alembic migrations before the app starts serving traffic.
+
+    Without this, a DB can silently drift behind the current models -- exactly
+    what happened to a real local dev database this session (it was one
+    migration behind with nothing to catch it until a request 500'd on a
+    missing table). Raises if migrations fail, since starting against a
+    stale schema is worse than failing loudly at boot.
+    """
+    alembic_ini = _REPO_ROOT / "alembic.ini"
+    cfg = AlembicConfig(str(alembic_ini))
+    cfg.set_main_option("sqlalchemy.url", settings.database_url)
+    command.upgrade(cfg, "head")
+    log.info("migrations_applied")
 
 
 def _sweep_stuck_runs(session_factory: sessionmaker) -> None:
@@ -74,6 +96,10 @@ def create_app(
     configure_logging(settings)
 
     if session_factory is None:
+        # Only real deployments reach here -- tests always inject their own
+        # session_factory (backed by Base.metadata.create_all on an isolated
+        # in-memory DB), so this never runs Alembic against a test database.
+        _run_migrations(settings)
         engine = create_db_engine(settings)
         session_factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
