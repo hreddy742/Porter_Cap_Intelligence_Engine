@@ -17,6 +17,7 @@ from sqlalchemy.orm import sessionmaker
 from porter_verify.connectors.base import ConnectorRegistry
 from porter_verify.connectors.colorado_connector import ColoradoOpenDataConnector
 from porter_verify.connectors.connecticut_connector import ConnecticutOpenDataConnector
+from porter_verify.connectors.florida_connector import FloridaOpenDataConnector
 from porter_verify.connectors.mock_vendor import MockVendorConnector
 from porter_verify.connectors.ohio_connector import OhioOpenDataConnector
 from porter_verify.connectors.oregon_connector import OregonOpenDataConnector
@@ -30,6 +31,7 @@ def build_default_registry(session_factory: sessionmaker | None = None) -> Conne
         registry.register(ConnecticutOpenDataConnector(session_factory))
         registry.register(OregonOpenDataConnector(session_factory))
         registry.register(OhioOpenDataConnector(session_factory))
+        registry.register(FloridaOpenDataConnector(session_factory))
     # Nationwide fallback last.
     registry.register(MockVendorConnector())
     return registry
