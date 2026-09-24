@@ -15,6 +15,20 @@ confident are we?*
 > Full product specification: [`docs/product_plan.md`](docs/product_plan.md) (Plan v1.0).
 > Architecture: [`docs/architecture.md`](docs/architecture.md).
 
+## Scope, and how this relates to the other Porter Capital repos
+
+Porter Capital also has a separate **Lead Intelligence** system (discovers and scores
+leads from federal contract award data, enriches contact info) and a **voice agent**
+(calls qualified leads). Porter Verify's job in that picture is compliance/legitimacy
+verification of a business — but as of now it runs against its **own** Postgres
+database with its **own** `companies`/`company_identifiers` schema, separate from Lead
+Intelligence's schema. **The two are not currently wired together** — there's no code
+path today where a Lead Intelligence company gets run through Porter Verify's
+verification flow, or vice versa. If/when that integration happens, it will need to go
+through Porter Verify's API rather than a shared database, since the schemas are
+intentionally different (Porter Verify tracks registration status, entity age,
+UCC/lien indicators; Lead Intelligence tracks contract signals and outreach status).
+
 ## Principles (non-negotiable)
 
 - **Evidence-backed only** — every claim links to a source, timestamp, and hash.
@@ -86,6 +100,9 @@ mypy                   # type check
 The test suite does **not** require Docker or a running Postgres; it uses an
 isolated SQLite database so contributors can run it instantly. Models are kept
 dialect-portable; Postgres-only features are applied conditionally.
+
+Local dev/manual testing generates real SQLite `.sqlite3`/`.sqlite3-wal`/`.sqlite3-shm`
+files at the repo root — all three patterns are gitignored; don't force-add them.
 
 ## Repository layout
 
