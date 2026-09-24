@@ -25,6 +25,8 @@ coverage.xml
 
 # Local databases / evidence artifacts
 *.sqlite3
+*.sqlite3-wal
+*.sqlite3-shm
 *.db
 evidence_store/
 /tmp/
