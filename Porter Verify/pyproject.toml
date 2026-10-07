@@ -19,6 +19,7 @@ dependencies = [
     "inflate64>=1.0",
     "slowapi>=0.1.9",
     "playwright>=1.45",
+    "scrapling[fetchers]>=0.4.14",
 ]
 
 [project.optional-dependencies]
